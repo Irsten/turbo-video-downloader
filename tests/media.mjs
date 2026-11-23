@@ -1,11 +1,11 @@
-// Materiały testowe z nagrań w tests/fixtures: segmenty TS (prosty muxer), packed AAC, fMP4
-// pocięte na fragmenty, playlisty HLS, manifesty DASH i napisy WebVTT.
+// Test material from the recordings in tests/fixtures: TS segments (a simple muxer), packed AAC, fMP4
+// cut into fragments, HLS playlists, DASH manifests and WebVTT subtitles.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
-export const TS_OFFSET = 10; // s – TS i napisy zaczynają się od PTS 10 s, jak w prawdziwych strumieniach
+export const TS_OFFSET = 10; // s – TS and subtitles start at PTS 10 s, as in real streams
 
 export function loadFixtures() {
   const load = (name) => {
@@ -81,7 +81,7 @@ function pesPackets(pid, pes, ccRef, pcr) {
     pkt[1] = (first ? 0x40 : 0) | (pid >> 8);
     pkt[2] = pid & 255;
     const withPcr = first && pcr != null;
-    let af = withPcr ? 8 : 0; // długość pola adaptacji z bajtem długości
+    let af = withPcr ? 8 : 0; // length of the adaptation field including its length byte
     if (184 - af > pes.length - p) af = 184 - (pes.length - p);
     pkt[3] = (af ? 0x30 : 0x10) | (ccRef.cc++ & 15);
     let q = 4;
@@ -108,9 +108,9 @@ function pesPackets(pid, pes, ccRef, pcr) {
 }
 
 /**
- * Segment TS z klatek wideo i ramek audio o czasach w [from, to).
- * cto – opóźnienie PTS względem DTS w klatkach (symuluje klatki B → ctts i lista edycji).
- * shift – przesunięcie czasu (s), np. żeby kolejne „segmenty transmisji” miały ciągłą oś PTS.
+ * A TS segment from video frames and audio frames with times in [from, to).
+ * cto – PTS delay relative to DTS in frames (simulates B-frames → ctts and an edit list).
+ * shift – time offset (s), e.g. so that consecutive "live segments" have a continuous PTS timeline.
  */
 export function buildTs(fx, from, to, { video = true, audio = true, cto = 0, shift = 0, cc = { v: { cc: 0 }, a: { cc: 0 }, psi: 0 } } = {}) {
   const OFFSET = TS_OFFSET + shift;
@@ -156,7 +156,7 @@ export function buildTs(fx, from, to, { video = true, audio = true, cto = 0, shi
   return Buffer.concat(packets);
 }
 
-/** Segment „packed audio”: tag ID3 z czasem (PRIV) + ramki ADTS. */
+/** A "packed audio" segment: ID3 tag with the timestamp (PRIV) + ADTS frames. */
 export function buildPackedAac(fx, from, to) {
   const frames = fx.audio.filter((f) => f.pts >= from && f.pts < to);
   const pts = Math.round((TS_OFFSET + frames[0].pts) * 90000);
@@ -183,7 +183,7 @@ function boxes(buf) {
   return list;
 }
 
-/** Plik pofragmentowany → { init (ftyp+moov), fragments: [moof+mdat], durations (s) }. */
+/** Fragmented file → { init (ftyp+moov), fragments: [moof+mdat], durations (s) }. */
 export function splitFmp4(buf) {
   const list = boxes(buf);
   const moov = list.find((b) => b.type === 'moov');
@@ -211,7 +211,7 @@ function readTfdt(frag) {
   const p = frag.indexOf('tfdt', 0, 'latin1');
   return frag[p + 4] ? Number(frag.readBigUInt64BE(p + 8)) : frag.readUInt32BE(p + 8);
 }
-/** Łączny czas próbek ze wszystkich trun (do długości ostatniego fragmentu). */
+/** Total duration of samples from all trun boxes (for the length of the last fragment). */
 function sumDurations(buf, timescale) {
   let total = 0;
   let p = 0;
@@ -246,12 +246,12 @@ const vttTime = (s) => {
 };
 
 export const CUES = [
-  { start: 0.5, end: 1.9, text: 'Dzień dobry' },
-  { start: 2.5, end: 4.5, text: 'Napis <i>pochyły</i> &amp; drugi' }, // przechodzi przez granicę segmentów
-  { start: 6.2, end: 7.8, text: 'Linia pierwsza\nLinia druga' }
+  { start: 0.5, end: 1.9, text: 'Good morning' },
+  { start: 2.5, end: 4.5, text: 'Italic <i>text</i> &amp; more' }, // crosses a segment boundary
+  { start: 6.2, end: 7.8, text: 'First line\nSecond line' }
 ];
 
-/** Segmenty WebVTT po 2 s z X-TIMESTAMP-MAP (czas 0 napisów = PTS początku nagrania). */
+/** WebVTT segments of 2 s with X-TIMESTAMP-MAP (subtitle time 0 = PTS of the recording start). */
 export function vttSegments(cues = CUES, segLen = 2, total = 8) {
   const out = [];
   for (let s = 0; s < total; s += segLen) {

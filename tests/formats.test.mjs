@@ -1,4 +1,4 @@
-// Parsery formatów: HLS (.m3u8), DASH (.mpd), napisy WebVTT → SRT.
+// Format parsers: HLS (.m3u8), DASH (.mpd), WebVTT subtitles → SRT, file name template.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseM3U8, audioOptions, subtitleOptions, mediaLabel } from '../lib/hls.js';
@@ -8,7 +8,7 @@ import { vttSegments, CUES, TS_OFFSET } from './media.mjs';
 
 // ---------------- HLS ----------------
 
-test('HLS master: warianty, audio w kilku językach, napisy', () => {
+test('HLS master: variants, audio in several languages, subtitles', () => {
   const pl = parseM3U8(
     `#EXTM3U
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="English",LANGUAGE="en",URI="en.m3u8"
@@ -25,7 +25,7 @@ test('HLS master: warianty, audio w kilku językach, napisy', () => {
   assert.equal(pl.kind, 'master');
   assert.equal(pl.variants[0].height, 1080);
   const audios = audioOptions(pl, pl.variants[0]);
-  assert.deepEqual(audios.map((a) => a.language), ['pl', 'en'], 'domyślna ścieżka pierwsza');
+  assert.deepEqual(audios.map((a) => a.language), ['pl', 'en'], 'default track first');
   const subs = subtitleOptions(pl, pl.variants[0]);
   assert.equal(subs.length, 2);
   assert.equal(subs[0].url, 'https://cdn.example/v/s/pl.m3u8');
@@ -33,7 +33,7 @@ test('HLS master: warianty, audio w kilku językach, napisy', () => {
   assert.equal(mediaLabel(audios[1]), 'English (EN)');
 });
 
-test('HLS media: numer sekwencji segmentów i docelowa długość', () => {
+test('HLS media: segment sequence numbers and target duration', () => {
   const pl = parseM3U8(
     '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:120\n#EXTINF:6,\na.ts\n#EXTINF:6,\nb.ts\n',
     'https://x/live/index.m3u8'
@@ -45,13 +45,13 @@ test('HLS media: numer sekwencji segmentów i docelowa długość', () => {
 
 // ---------------- DASH ----------------
 
-test('czas ISO 8601', () => {
+test('ISO 8601 duration', () => {
   assert.equal(parseDuration('PT1H2M3.5S'), 3723.5);
   assert.equal(parseDuration('PT0S'), 0);
   assert.equal(parseDuration('P1DT1S'), 86401);
 });
 
-test('DASH: SegmentTimeline (r=-1), BaseURL na kilku poziomach, sortowanie jakości', () => {
+test('DASH: SegmentTimeline (r=-1), BaseURL on several levels, sorting of qualities', () => {
   const mpd = parseMpd(
     `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:cenc="urn:mpeg:cenc:2013" type="static" mediaPresentationDuration="PT10S">
@@ -80,7 +80,7 @@ test('DASH: SegmentTimeline (r=-1), BaseURL na kilku poziomach, sortowanie jako�
   assert.deepEqual(
     v.segments.map((s) => s.url.split('/').pop()),
     ['0.m4s', '4000.m4s', '8000.m4s'],
-    't=0 d=4000 r=1 → 0, 4000; potem d=2000 do końca (10 s)'
+    't=0 d=4000 r=1 → 0, 4000; then d=2000 until the end (10 s)'
   );
   assert.equal(Math.round(v.frameRate * 100) / 100, 29.97);
   assert.equal(representationLabel(v), '720p · 2.5 Mb/s');
@@ -91,7 +91,7 @@ test('DASH: SegmentTimeline (r=-1), BaseURL na kilku poziomach, sortowanie jako�
   assert.equal(dashAudioOptions(mpd).length, 1);
 });
 
-test('DASH: SegmentList z zakresami, SegmentBase (cały plik), DRM, napisy', () => {
+test('DASH: SegmentList with ranges, SegmentBase (whole file), DRM, subtitles', () => {
   const mpd = parseMpd(
     `<MPD type="static" mediaPresentationDuration="PT6S"><Period>
       <AdaptationSet mimeType="video/mp4">
@@ -121,32 +121,48 @@ test('DASH: SegmentList z zakresami, SegmentBase (cały plik), DRM, napisy', () 
   assert.equal(mpd.text[0].url, 'https://x.example/m/pl.vtt');
 });
 
-test('DASH: transmisja na żywo i zły plik', () => {
+test('DASH: live stream and a wrong file', () => {
   assert.equal(parseMpd('<MPD type="dynamic"><Period/></MPD>', 'https://x/a.mpd').dynamic, true);
-  assert.throws(() => parseMpd('<html><body>404</body></html>', 'https://x/a.mpd'), /manifest DASH/);
+  assert.throws(() => parseMpd('<html><body>404</body></html>', 'https://x/a.mpd'), /not a DASH manifest/);
 });
 
-// ---------------- napisy ----------------
+// ---------------- subtitles ----------------
 
-test('WebVTT z segmentów HLS: wyrównanie X-TIMESTAMP-MAP do początku filmu, bez powtórzeń', () => {
+test('WebVTT from HLS segments: X-TIMESTAMP-MAP aligned to the start of the video, no duplicates', () => {
   const cues = mergeVtt(vttSegments(), TS_OFFSET);
-  assert.equal(cues.length, CUES.length, 'napis z granicy segmentów tylko raz');
+  assert.equal(cues.length, CUES.length, 'a cue on a segment boundary only once');
   cues.forEach((c, i) => {
     assert.ok(Math.abs(c.start - CUES[i].start) < 0.002);
     assert.ok(Math.abs(c.end - CUES[i].end) < 0.002);
   });
-  // Film zaczyna się 2 s później niż odniesienie napisów → napisy przesunięte o -2 s,
-  // a napis w całości sprzed początku filmu znika.
+  // The video starts 2 s later than the subtitle reference → subtitles shifted by -2 s,
+  // and a cue entirely before the start of the video disappears.
   const shifted = mergeVtt(vttSegments(), TS_OFFSET + 2);
   assert.equal(shifted.length, CUES.length - 1);
   assert.ok(Math.abs(shifted[0].start - (CUES[1].start - 2)) < 0.002);
   const cut = mergeVtt(vttSegments(), TS_OFFSET + 1);
-  assert.equal(cut[0].start, 0, 'napis zaczęty przed początkiem filmu obcięty do 0');
+  assert.equal(cut[0].start, 0, 'a cue started before the video start is clipped to 0');
   assert.ok(Math.abs(cut[0].end - (CUES[0].end - 1)) < 0.002);
 });
 
 test('SRT: format czasu, przecinek, znaczniki i encje', () => {
   const srt = toSrt(parseVtt('WEBVTT\n\nid1\n00:01:02.5 --> 01:00:00.000 line:90%\n<v Jan>Ala <c.yellow>ma</c> <i>kota</i> &amp; psa\n').cues);
   assert.equal(srt, '1\r\n00:01:02,500 --> 01:00:00,000\r\nAla ma <i>kota</i> & psa\r\n');
-  assert.equal(cleanCueText('<b>tłusty</b> <00:00:01.000>dalej'), '<b>tłusty</b> dalej');
+  assert.equal(cleanCueText('<b>bold</b> <00:00:01.000>more'), '<b>bold</b> more');
+});
+
+// ---------------- file name template ----------------
+
+test('name template: variables, empty brackets, forbidden characters, defaults', async () => {
+  const { applyTemplate, DEFAULT_TEMPLATE } = await import('../lib/media.js');
+  const v = { title: 'Cat video', quality: '720p', file: 'video123', host: 'example.com' };
+  assert.equal(applyTemplate(DEFAULT_TEMPLATE, v), 'Cat video [720p]');
+  assert.equal(applyTemplate(DEFAULT_TEMPLATE, { ...v, quality: '' }), 'Cat video', 'empty [] disappears');
+  assert.equal(applyTemplate('{site} - {title}', { ...v, title: 'A: B/C?' }), 'example.com - A B C');
+  assert.equal(applyTemplate('{title} - {site}', { ...v, host: '' }), 'Cat video', 'a dangling separator disappears');
+  assert.equal(applyTemplate('{TYTUL} ({jakość})', v), 'Cat video (720p)', 'case-insensitive; Polish names from older versions still work');
+  assert.equal(applyTemplate('', { title: '', file: 'video123' }), 'video123', 'empty result → name from the address');
+  assert.equal(applyTemplate('{title}', {}), 'video');
+  assert.match(applyTemplate('{date} {file}', v), /^\d{4}-\d{2}-\d{2} video123$/);
+  assert.equal(applyTemplate('{unknown} {title}', v), '{unknown} Cat video', 'unknown variables stay');
 });

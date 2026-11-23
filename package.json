@@ -1,7 +1,7 @@
 {
   "name": "turbo-video-downloader",
   "private": true,
-  "description": "Testy rozszerzenia Turbo Video Downloader (samo rozszerzenie nie wymaga Node).",
+  "description": "Tests of the Turbo Video Downloader extension (the extension itself does not need Node).",
   "type": "module",
   "engines": {
     "node": ">=18"

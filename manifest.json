@@ -2,15 +2,17 @@
   "manifest_version": 3,
   "name": "Turbo Video Downloader",
   "short_name": "TurboVD",
-  "version": "1.1.0",
-  "description": "Wykrywa filmy na stronach (MP4, WebM, HLS, DASH) i pobiera je wielowątkowo do jednego pliku MP4 – z napisami, wznawianiem i nagrywaniem transmisji.",
+  "version": "1.2.0",
+  "description": "Detects videos on web pages (MP4, WebM, HLS, DASH) and downloads them over many connections into one MP4 file – with subtitles, resuming and live stream recording.",
   "minimum_chrome_version": "116",
   "permissions": [
     "webRequest",
     "downloads",
     "storage",
     "unlimitedStorage",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "contextMenus",
+    "notifications"
   ],
   "host_permissions": ["<all_urls>"],
   "background": {

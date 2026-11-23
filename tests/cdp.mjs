@@ -1,4 +1,4 @@
-// Uruchamianie Chrome na tymczasowym profilu i sterowanie nim przez CDP (pipe).
+// Launching Chrome on a temporary profile and driving it over CDP (pipe).
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,11 +17,11 @@ export function findChrome() {
     '/usr/bin/chromium'
   ];
   const found = candidates.find((p) => fs.existsSync(p));
-  if (!found) throw new Error('Nie znaleziono Chrome – podaj ścieżkę w zmiennej CHROME.');
+  if (!found) throw new Error('Chrome not found – set its path in the CHROME variable.');
   return found;
 }
 
-/** Czeka, aż fn() zwróci prawdziwą wartość (wyjątki traktuje jak „jeszcze nie”). */
+/** Waits until fn() returns a truthy value (exceptions count as "not yet"). */
 export async function waitFor(fn, timeout = 10000) {
   const end = Date.now() + timeout;
   let last;
@@ -37,7 +37,7 @@ export async function waitFor(fn, timeout = 10000) {
   return last instanceof Error ? null : last;
 }
 
-/** Na Windowsie pliki profilu bywają jeszcze chwilę zablokowane po zamknięciu Chrome. */
+/** On Windows the profile files can stay locked for a while after Chrome closes. */
 async function removeDir(dir) {
   for (let i = 0; i < 20; i++) {
     try {
@@ -47,12 +47,12 @@ async function removeDir(dir) {
       await sleep(500);
     }
   }
-  console.warn(`Nie udało się usunąć ${dir} (pliki wciąż zablokowane) – możesz go skasować ręcznie.`);
+  console.warn(`Could not remove ${dir} (files still locked) – you can delete it by hand.`);
 }
 
 /**
- * Uruchamia Chrome. Zwraca { send, evaluate, openTarget, close, downloads, work, stderr() }.
- * downloads – folder pobrań profilu.
+ * Launches Chrome. Returns { send, evaluate, openTarget, close, downloads, work, stderr() }.
+ * downloads – the profile's downloads folder.
  */
 export async function launchChrome({ headful = !!process.env.HEADFUL, keep = !!process.env.KEEP } = {}) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'tvd-e2e-'));
@@ -121,7 +121,7 @@ export async function launchChrome({ headful = !!process.env.HEADFUL, keep = !!p
     await Promise.race([send('Browser.close').catch(() => {}), sleep(3000)]);
     await Promise.race([exited, sleep(5000)]);
     proc.kill();
-    if (keep) console.log('Profil i pobrane pliki:', work);
+    if (keep) console.log('Profile and downloaded files:', work);
     else await removeDir(work);
   }
   await send('Browser.getVersion');

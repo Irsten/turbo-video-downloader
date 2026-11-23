@@ -1,42 +1,58 @@
-// Service worker: wykrywa filmy w ruchu sieciowym kart i trzyma listę per karta.
-import { classify, dedupeKey, urlExt, extFromMime, isBlockedHost, isHttp, pageKey, VIDEO_EXT } from './lib/media.js';
+// Service worker: detects videos in the tabs' network traffic and keeps a list per tab.
+import {
+  classify,
+  dedupeKey,
+  urlExt,
+  extFromMime,
+  isBlockedHost,
+  isHttp,
+  pageKey,
+  applyTemplate,
+  nameFromUrl,
+  hostOf,
+  VIDEO_EXT
+} from './lib/media.js';
 import { parseM3U8 } from './lib/hls.js';
 import { makePrepare, FETCH_INIT } from './lib/net.js';
+import { loadSettings, newJobId } from './lib/jobs.js';
 
 const SELF_ORIGIN = chrome.runtime.getURL('').replace(/\/$/, '');
 const MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object'];
 const MAX_ITEMS_PER_TAB = 150;
-const MIN_FILE_SIZE = 256 * 1024; // mniejsze "filmy" to zwykle podglądy/fragmenty
+const MIN_FILE_SIZE = 256 * 1024; // smaller "videos" are usually previews/fragments
 
 /** tabId -> Map(key -> item) */
 const tabs = new Map();
-/** requestId -> { referer, origin } – nagłówki, z którymi strona pobierała media */
+/** requestId -> { referer, origin } – headers the page used when fetching media */
 const reqHeaders = new Map();
-/** Zadania czekające na menedżer pobierania. */
+/** Jobs waiting for the download manager. */
 let jobQueue = [];
+/** tabId -> { page, og, videos: { key: { src, stream, poster, duration, height } } } – thumbnails and durations */
+const pageInfo = new Map();
 
 const ready = (async () => {
   try {
     const all = await chrome.storage.session.get(null);
     for (const [k, v] of Object.entries(all)) {
       if (k.startsWith('tab:')) tabs.set(Number(k.slice(4)), new Map(Object.entries(v)));
+      else if (k.startsWith('info:')) pageInfo.set(Number(k.slice(5)), v);
     }
     jobQueue = all.jobQueue || [];
   } catch (e) {
-    console.warn('Nie udało się wczytać stanu', e);
+    console.warn('Could not load the saved state', e);
   }
 })();
 
 const persistQueue = () => chrome.storage.session.set({ jobQueue }).catch(() => {});
 
-// ---------- menedżer pobierania (jedna karta) ----------
+// ---------- download manager (a single tab) ----------
 const MANAGER_URL = chrome.runtime.getURL('manager.html');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const managerContexts = () =>
   chrome.runtime.getContexts({ contextTypes: ['TAB'], documentUrls: [MANAGER_URL] }).catch(() => []);
 
 let managerChain = Promise.resolve();
-/** Kolejkowane wywołania – dwa szybkie kliknięcia nie otworzą dwóch menedżerów. */
+/** Queued calls – two quick clicks won't open two managers. */
 function ensureManager(focus) {
   const p = managerChain.then(async () => {
     let ctx = await managerContexts();
@@ -57,11 +73,78 @@ function ensureManager(focus) {
   return p;
 }
 
+/** A job for the manager (popup, context menu). */
+async function enqueueJob(job) {
+  jobQueue.push(job);
+  persistQueue();
+  await ensureManager(false);
+  chrome.runtime.sendMessage({ type: 'jobs-available' }).catch(() => {});
+}
+
+// ---------- context menu ----------
+const VIDEO_LINKS = ['mp4', 'm4v', 'webm', 'mov', 'mkv', 'm3u8', 'mpd'].map((e) => `*://*/*.${e}*`);
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.action.setBadgeBackgroundColor({ color: '#e5243b' });
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: 'tvd-video', title: '⚡ Download this video (Turbo)', contexts: ['video'] });
+    chrome.contextMenus.create({ id: 'tvd-link', title: '⚡ Download video from link (Turbo)', contexts: ['link'], targetUrlPatterns: VIDEO_LINKS });
+  });
 });
 
-// ---------- zapis stanu ----------
+/** Download from the context menu: a link or the source of a <video>. */
+async function downloadFromContext(info, tab) {
+  await ready;
+  const url = info.menuItemId === 'tvd-link' ? info.linkUrl : info.srcUrl;
+  if (!isHttp(url) || isBlockedHost(url)) {
+    // Video played from a stream (blob:/MediaSource) – only the list of detected videos knows its address.
+    await chrome.action.openPopup().catch(() =>
+      chrome.notifications.create('tvd-hint', {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Turbo Video Downloader',
+        message: 'This video is played from a stream – click the extension icon to choose the quality.'
+      })
+    );
+    return null;
+  }
+  const settings = await loadSettings();
+  const known = tab?.id >= 0 ? tabs.get(tab.id)?.get(dedupeKey(url)) : null;
+  const ext = urlExt(url);
+  const job = {
+    id: newJobId(),
+    createdAt: Date.now(),
+    kind: classify(url) || 'file',
+    url,
+    headers: known?.headers || { referer: info.pageUrl || tab?.url || '', origin: '' },
+    filename: applyTemplate(settings.template, { title: tab?.title || '', file: nameFromUrl(url), host: hostOf(info.pageUrl || tab?.url) }),
+    ext: VIDEO_EXT.includes(ext) ? ext : known?.ext || '',
+    label: nameFromUrl(url) || hostOf(url)
+  };
+  await enqueueJob(job);
+  return job;
+}
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  downloadFromContext(info, tab).catch((e) => console.warn(e));
+});
+globalThis.tvdDownloadFromContext = downloadFromContext; // for tests (the context menu can't be clicked over CDP)
+
+// ---------- notifications and icon ----------
+chrome.notifications.onClicked.addListener((id) => {
+  chrome.notifications.clear(id);
+  const done = /^tvd-done:(\d+)$/.exec(id);
+  if (done) chrome.downloads.show(Number(done[1]));
+  else ensureManager(true);
+});
+
+/** After the manager is closed the icon goes back to normal (no progress bar). */
+async function resetIconIfIdle() {
+  if (!(await managerContexts()).length) {
+    chrome.action.setIcon({ path: { 16: 'icons/icon16.png', 32: 'icons/icon32.png', 48: 'icons/icon48.png', 128: 'icons/icon128.png' } }).catch(() => {});
+  }
+}
+
+// ---------- saving state ----------
 const saveTimers = new Map();
 function scheduleSave(tabId) {
   if (saveTimers.has(tabId)) return;
@@ -78,7 +161,7 @@ function scheduleSave(tabId) {
   );
 }
 
-/** Klucze pozycji, których popup nie pokazuje: jakości i audio z playlisty master, puste playlisty. */
+/** Keys of items the popup doesn't show: qualities and audio of a master playlist, empty playlists. */
 function hiddenKeys(m) {
   const hidden = new Set();
   for (const it of m.values()) {
@@ -88,7 +171,7 @@ function hiddenKeys(m) {
   return hidden;
 }
 
-/** Licznik na ikonie = tyle filmów, ile popup pokaże dla bieżącej podstrony. */
+/** Badge on the icon = as many videos as the popup will show for the current sub-page. */
 async function updateBadge(tabId) {
   let n = 0;
   if (tabs.get(tabId)?.size) {
@@ -100,9 +183,9 @@ async function updateBadge(tabId) {
   chrome.action.setBadgeText({ tabId, text: n ? String(n) : '' }).catch(() => {});
 }
 
-// ---------- analiza HLS ----------
-// Odtwarzacz pobiera playlistę master, a potem playlisty jakości i audio – każda trafia na listę.
-// Jedno pobranie playlisty mówi, które z nich to tylko części mastera (popup ich nie pokazuje).
+// ---------- HLS analysis ----------
+// The player fetches the master playlist, then the quality and audio playlists – each one lands on the list.
+// A single fetch of a playlist tells which of them are only parts of the master (the popup hides them).
 const analyzing = new Set();
 
 async function analyzeHls(tabId, item) {
@@ -124,7 +207,7 @@ async function analyzeHls(tabId, item) {
           : { kind: 'media', empty: !pl.segments.length };
     }
   } catch {
-    // nie udało się – pozycja zostaje widoczna, popup spróbuje sam
+    // failed – the item stays visible, the popup will try on its own
   } finally {
     analyzing.delete(id);
   }
@@ -136,6 +219,7 @@ async function analyzeHls(tabId, item) {
 }
 
 function clearTab(tabId) {
+  if (pageInfo.delete(tabId)) chrome.storage.session.remove('info:' + tabId).catch(() => {});
   if (!tabs.has(tabId)) return;
   tabs.delete(tabId);
   scheduleSave(tabId);
@@ -150,8 +234,8 @@ function addItem(tabId, item) {
     if (item.size && (!prev.size || item.size > prev.size)) (prev.size = item.size), (changed = true);
     if (item.mime && !prev.mime) (prev.mime = item.mime), (changed = true);
     if (item.headers.referer && !prev.headers.referer) (prev.headers = item.headers), (changed = true);
-    // Film znów w użyciu (powrót na podstronę w aplikacji SPA, odtwarzacz w rogu) – przypisz go
-    // do bieżącej podstrony.
+    // The video is in use again (back to a sub-page in an SPA, mini player) – assign it
+    // to the current sub-page.
     if (item.page && item.page !== prev.page) (prev.page = item.page), (changed = true);
     if (item.title && item.page === prev.page && item.title !== prev.title) (prev.title = item.title), (changed = true);
     if (changed) scheduleSave(tabId);
@@ -175,7 +259,7 @@ async function tabInfo(tabId) {
 
 const isSelf = (d) => d.initiator === SELF_ORIGIN;
 
-// ---------- nasłuch sieci ----------
+// ---------- network listeners ----------
 chrome.webRequest.onBeforeRequest.addListener(
   (d) => {
     if (d.tabId >= 0 && d.frameId === 0) ready.then(() => clearTab(d.tabId));
@@ -255,30 +339,45 @@ async function handleResponse(d) {
   });
 }
 
-// ---------- karty ----------
-chrome.tabs.onRemoved.addListener((tabId) => ready.then(() => clearTab(tabId)));
+// ---------- tabs ----------
+chrome.tabs.onRemoved.addListener((tabId) => {
+  ready.then(() => clearTab(tabId));
+  resetIconIfIdle();
+});
 
-// Zmiana adresu bez przeładowania (aplikacje SPA): lista zostaje, ale licznik ma liczyć filmy
-// bieżącej podstrony – popup pokazuje wcześniejsze w osobnej, zwiniętej sekcji.
+// Address change without a reload (SPA): the list stays, but the badge should count the videos
+// of the current sub-page – the popup shows the earlier ones in a separate, collapsed section.
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.url) ready.then(() => tabs.has(tabId) && updateBadge(tabId));
 });
 
-// ---------- wiadomości ----------
+// ---------- messages ----------
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     await ready;
     switch (msg?.type) {
       case 'enqueue': {
-        jobQueue.push(msg.job);
-        persistQueue();
-        await ensureManager(false);
-        chrome.runtime.sendMessage({ type: 'jobs-available' }).catch(() => {});
+        await enqueueJob(msg.job);
         sendResponse({ ok: true });
         return;
       }
+      case 'page-info': {
+        sendResponse({ ok: true });
+        const tabId = sender.tab?.id;
+        if (tabId == null || tabId < 0) return;
+        const page = pageKey(sender.tab.url || '');
+        let info = pageInfo.get(tabId);
+        if (!info || info.page !== page) pageInfo.set(tabId, (info = { page, og: '', videos: {} }));
+        if (msg.og && sender.frameId === 0) info.og = msg.og;
+        (msg.videos || []).forEach((v, i) => {
+          if (Object.keys(info.videos).length >= 40) return;
+          info.videos[v.src ? dedupeKey(v.src) : `stream:${sender.frameId}:${i}`] = v;
+        });
+        chrome.storage.session.set({ ['info:' + tabId]: info }).catch(() => {});
+        return;
+      }
       case 'take-jobs': {
-        // Synchronicznie: żaden inny handler nie wejdzie pomiędzy odczyt a wyczyszczenie.
+        // Synchronously: no other handler can get in between reading and clearing.
         const jobs = jobQueue;
         jobQueue = [];
         persistQueue();
@@ -318,7 +417,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             time: Date.now()
           });
         }
-        // Napisy z <track> – dopinamy do filmu, w którym są osadzone.
+        // Subtitles from <track> – attached to the video they are embedded in.
         const m = tabs.get(tabId);
         for (const t of tracks) {
           const video = m?.get(dedupeKey(t.of || ''));
@@ -334,7 +433,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'get-media': {
         const m = tabs.get(msg.tabId);
         const hidden = m ? hiddenKeys(m) : new Set();
-        sendResponse({ items: m ? [...m.values()].map((it) => ({ ...it, hidden: hidden.has(it.key) })) : [] });
+        sendResponse({
+          items: m ? [...m.values()].map((it) => ({ ...it, hidden: hidden.has(it.key) })) : [],
+          info: pageInfo.get(msg.tabId) || null
+        });
         return;
       }
       case 'clear-media': {

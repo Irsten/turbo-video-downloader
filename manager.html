@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pl">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Menedżer pobierania – Turbo Video Downloader</title>
+    <title>Download manager – Turbo Video Downloader</title>
     <link rel="icon" href="icons/icon32.png" />
     <link rel="stylesheet" href="ui.css" />
     <style>
@@ -130,6 +130,44 @@
         color: var(--text);
         font-weight: 600;
       }
+      .settings .template {
+        flex-basis: 100%;
+      }
+      .settings .template input {
+        width: 260px;
+      }
+      #history {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .entry {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 7px 10px;
+        border-radius: 8px;
+      }
+      .entry:hover {
+        background: var(--panel);
+      }
+      .entry .name {
+        flex: 1;
+        min-width: 0;
+      }
+      .entry .when {
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .entry button {
+        padding: 3px 8px;
+        font-size: 12px;
+      }
+      #history .empty {
+        padding: 14px;
+      }
       .settings .note {
         flex-basis: 100%;
         margin: 2px 0 0;
@@ -189,39 +227,52 @@
     <main>
       <header>
         <img class="logo" src="icons/icon48.png" alt="" />
-        <h1>Menedżer pobierania</h1>
+        <h1>Download manager</h1>
       </header>
 
       <section class="panel settings" id="settings">
-        <label title="Ile równoległych połączeń HTTP na jeden plik (MP4/WebM). Opera dla serwerów HTTP/1.1 otwiera max 6 połączeń na host.">
-          Połączenia na plik <input type="number" id="connections" min="1" max="16" />
+        <label title="How many parallel HTTP connections per file (MP4/WebM). For HTTP/1.1 servers Chromium-based browsers open at most 6 connections per host.">
+          Connections per file <input type="number" id="connections" min="1" max="16" />
         </label>
-        <label title="Ile segmentów HLS/DASH pobierać jednocześnie">
-          Segmenty naraz <input type="number" id="hlsConcurrency" min="1" max="32" />
+        <label title="How many HLS/DASH segments to download at the same time">
+          Segments at once <input type="number" id="hlsConcurrency" min="1" max="32" />
         </label>
-        <label title="Ile filmów pobierać jednocześnie (nagrywanie transmisji nie wlicza się do limitu)">
-          Pobrania naraz <input type="number" id="maxParallel" min="1" max="6" />
+        <label title="How many videos to download at the same time (live recordings don't count towards the limit)">
+          Downloads at once <input type="number" id="maxParallel" min="1" max="6" />
         </label>
-        <label title="Obraz, dźwięk i segmenty HLS/DASH składane w jeden plik .mp4 – bez ponownego kodowania, bez utraty jakości">
-          <input type="checkbox" id="mp4" /> Łącz w jeden plik MP4
+        <label title="Video, audio and HLS/DASH segments are put together into one .mp4 file – no re-encoding, no quality loss">
+          <input type="checkbox" id="mp4" /> Merge into one MP4 file
         </label>
-        <label><input type="checkbox" id="saveAs" /> Pytaj, gdzie zapisać</label>
+        <label><input type="checkbox" id="saveAs" /> Ask where to save</label>
+        <label title="Notification when a download finishes or fails while this tab is in the background">
+          <input type="checkbox" id="notify" /> Notifications
+        </label>
+        <label class="template">
+          File name <input type="text" id="template" spellcheck="false" />
+          <span class="muted" id="template-preview"></span>
+        </label>
         <p class="note">
-          Pobierane dane trafiają od razu na dysk. Po zamknięciu tej karty albo restarcie przeglądarki
-          pobieranie wznowi się po ponownym otwarciu menedżera.
+          Downloaded data goes straight to disk. If you close this tab or restart the browser,
+          downloads resume when you open the manager again.
         </p>
       </section>
 
       <form class="panel add" id="add-form">
-        <input type="url" id="add-url" placeholder="Wklej link do pliku wideo (.mp4, .webm…), playlisty .m3u8 albo manifestu .mpd" required />
-        <button class="primary" type="submit">⚡ Pobierz</button>
+        <input type="url" id="add-url" placeholder="Paste a link to a video file (.mp4, .webm…), an .m3u8 playlist or an .mpd manifest" required />
+        <button class="primary" type="submit">⚡ Download</button>
       </form>
 
       <div class="toolbar">
-        <h2>Pobrania</h2>
-        <button id="clear-finished" class="ghost">Usuń zakończone</button>
+        <h2>Downloads</h2>
+        <button id="clear-finished" class="ghost">Remove finished</button>
       </div>
       <div id="jobs"></div>
+
+      <div class="toolbar">
+        <h2>History</h2>
+        <button id="clear-history" class="ghost">Clear history</button>
+      </div>
+      <div id="history"></div>
     </main>
     <script type="module" src="manager.js"></script>
   </body>

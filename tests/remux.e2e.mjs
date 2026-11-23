@@ -1,6 +1,6 @@
-// Łączenie w MP4 (lib/remux.js) sprawdzane odtwarzaczem Chrome: każdy wariant musi się wczytać,
-// mieć obraz 320×180 i dźwięk, trwać ~8 s i dać się odtworzyć do końca.
-// Uruchom: npm run test:remux
+// Merging into MP4 (lib/remux.js) checked with the Chrome player: every variant has to load,
+// have 320×180 video and audio, last ~8 s and play through to the end.
+// Run: npm run test:remux
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,18 +11,18 @@ import { loadFixtures, buildTs, buildPackedAac, splitFmp4 } from './media.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const fx = loadFixtures();
 
-// Warianty: lista wejść (ścieżek), każde wejście to lista segmentów.
+// Variants: a list of inputs (tracks), each input is a list of segments.
 const SEG = [0, 2, 4, 6, 8];
 const segs = (fn) => SEG.slice(0, -1).map((s, i) => fn(s, SEG[i + 1]));
 const tsCc = () => ({ v: { cc: 0 }, a: { cc: 0 }, psi: 0 });
 const cases = {
-  'TS: obraz + dźwięk': [segs(((cc) => (a, b) => buildTs(fx, a, b, { cc }))(tsCc()))],
-  'TS: klatki z przesunięciem PTS (ctts)': [segs(((cc) => (a, b) => buildTs(fx, a, b, { cto: 2, cc }))(tsCc()))],
-  'TS: obraz + osobne packed AAC': [
+  'TS: video + audio': [segs(((cc) => (a, b) => buildTs(fx, a, b, { cc }))(tsCc()))],
+  'TS: frames with a PTS offset (ctts)': [segs(((cc) => (a, b) => buildTs(fx, a, b, { cto: 2, cc }))(tsCc()))],
+  'TS: video + separate packed AAC': [
     segs(((cc) => (a, b) => buildTs(fx, a, b, { audio: false, cc }))(tsCc())),
     segs((a, b) => buildPackedAac(fx, a, b))
   ],
-  'fMP4: segmenty obrazu + segmenty dźwięku': (() => {
+  'fMP4: video segments + audio segments': (() => {
     const v = splitFmp4(fx.recVideo);
     const a = splitFmp4(fx.recAudio);
     return [
@@ -30,7 +30,7 @@ const cases = {
       [a.init, ...a.fragments]
     ];
   })(),
-  'fMP4: całe pliki (DASH SegmentBase)': [[fx.recVideo], [fx.recAudio]]
+  'fMP4: whole files (DASH SegmentBase)': [[fx.recVideo], [fx.recAudio]]
 };
 
 const assets = {};
@@ -47,7 +47,7 @@ async function play(blob) {
   v.muted = true;
   v.src = URL.createObjectURL(blob);
   document.body.append(v);
-  await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('błąd wczytania: ' + (v.error && v.error.message))); });
+  await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('load error: ' + (v.error && v.error.message))); });
   const info = { duration: v.duration, width: v.videoWidth, height: v.videoHeight };
   v.playbackRate = 4;
   await v.play();
@@ -105,5 +105,5 @@ try {
   await chrome.close();
   server.close();
 }
-console.log(failed ? `\n${failed} nieudanych` : '\nWszystkie warianty odtwarzają się poprawnie');
+console.log(failed ? `\n${failed} failed` : '\nAll variants play correctly');
 process.exit(failed ? 1 : 0);

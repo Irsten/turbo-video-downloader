@@ -1,10 +1,10 @@
-// Generuje nagrania testowe przy pomocy Chrome (WebCodecs + MediaRecorder) – bez ffmpeg.
-// Wynik trafia do tests/fixtures/ i jest częścią repozytorium; uruchamiaj tylko, gdy trzeba
-// go odtworzyć:  node tests/fixtures/generate.mjs
+// Generates the test recordings with Chrome (WebCodecs + MediaRecorder) – no ffmpeg needed.
+// The output goes to tests/fixtures/ and is part of the repository; run it only when it has to
+// be recreated:  node tests/fixtures/generate.mjs
 //
-//   video.h264 + video.json – H.264 (Annex B), 320×180, 25 kl/s, klatka kluczowa co 2 s
-//   audio.adts + audio.json – AAC-LC w ramkach ADTS, 48 kHz stereo
-//   rec-video.mp4, rec-audio.mp4 – pofragmentowane MP4 z MediaRecorder (niezależny muxer)
+//   video.h264 + video.json – H.264 (Annex B), 320×180, 25 fps, a key frame every 2 s
+//   audio.adts + audio.json – AAC-LC in ADTS frames, 48 kHz stereo
+//   rec-video.mp4, rec-audio.mp4 – fragmented MP4 from MediaRecorder (an independent muxer)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -96,7 +96,7 @@ try {
   fs.writeFileSync(path.join(OUT, 'video.json'), JSON.stringify(enc.video.meta));
   fs.writeFileSync(path.join(OUT, 'audio.adts'), Buffer.from(enc.audio.data, 'base64'));
   fs.writeFileSync(path.join(OUT, 'audio.json'), JSON.stringify(enc.audio.meta));
-  console.log(`WebCodecs: ${enc.video.meta.length} klatek, ${enc.audio.meta.length} ramek AAC`);
+  console.log(`WebCodecs: ${enc.video.meta.length} frames, ${enc.audio.meta.length} AAC frames`);
 
   const rec = await chrome.evaluate(t.sessionId, 'record()');
   fs.writeFileSync(path.join(OUT, 'rec-video.mp4'), Buffer.from(rec.v, 'base64'));

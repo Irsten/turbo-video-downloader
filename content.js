@@ -1,15 +1,15 @@
-// Skrypt strony: znajduje filmy osadzone w <video>/<source> oraz linki do plików wideo.
-// Po pierwszym pełnym skanie sprawdza tylko nowe i zmienione elementy, więc strony
-// z nieskończonym przewijaniem nie są co chwilę przeszukiwane od początku.
+// Page script: finds videos embedded in <video>/<source> and links to video files.
+// After the first full scan it checks only new and changed elements, so pages
+// with infinite scrolling aren't searched from the start over and over.
 (() => {
   if (window.__turboVdLoaded) return;
   window.__turboVdLoaded = true;
 
   const VIDEO_LINK = /\.(mp4|m4v|webm|mov|mkv|flv|ogv|avi|3gp|wmv|m3u8)(\?|#|$)/i;
   const SELECTOR = 'video, source, track[src], a[href]';
-  const MAX_PENDING = 2000; // przy masowej przebudowie strony taniej przeskanować całość raz
+  const MAX_PENDING = 2000; // on a massive page rebuild it's cheaper to rescan everything once
   const seen = new Set();
-  let pending = new Set(); // elementy do sprawdzenia (wraz z potomkami)
+  let pending = new Set(); // elements to check (with their descendants)
   let fullScan = true;
   let timer = null;
 
@@ -22,7 +22,7 @@
     } else if (tag === 'source') {
       if (el.parentElement?.localName === 'video') add(el.src, 'source');
     } else if (tag === 'track') {
-      // Napisy osadzone w filmie (WebVTT) – dopinane do pozycji filmu.
+      // Subtitles embedded in the video (WebVTT) – attached to the video's item.
       const video = el.parentElement;
       const of = video?.localName === 'video' ? video.currentSrc || video.src : '';
       if (of && /^(subtitles|captions|)$/.test(el.kind || '')) add(el.src, 'track', { of, lang: el.srclang || '', label: el.label || '' });
@@ -47,12 +47,49 @@
       check(root, add);
       for (const el of root.querySelectorAll(SELECTOR)) check(el, add);
     }
-    if (!items.length) return;
+    pageInfo();
+    if (items.length) send({ type: 'dom-media', items });
+  }
+
+  function send(msg) {
     try {
-      chrome.runtime.sendMessage({ type: 'dom-media', items }).catch(() => {});
+      chrome.runtime.sendMessage(msg).catch(() => {});
     } catch {
-      // rozszerzenie zostało przeładowane – ignoruj
+      // the extension was reloaded – ignore
     }
+  }
+
+  // Thumbnails and duration for the popup list: <video> posters, the page's og:image, duration.
+  let lastInfo = '';
+  const abs = (u) => {
+    try {
+      const url = new URL(u, location.href);
+      return /^https?:$/.test(url.protocol) ? url.href : '';
+    } catch {
+      return '';
+    }
+  };
+  function pageInfo() {
+    const videos = [];
+    for (const v of document.querySelectorAll('video')) {
+      const src = v.currentSrc || v.src || '';
+      const info = {
+        src: /^https?:/i.test(src) ? src : '',
+        stream: /^blob:/i.test(src), // HLS/DASH player (MediaSource)
+        poster: v.poster ? abs(v.poster) : '',
+        duration: isFinite(v.duration) ? Math.round(v.duration) : 0,
+        height: v.videoHeight || 0
+      };
+      if (info.poster || info.duration) videos.push(info);
+      if (videos.length >= 20) break;
+    }
+    const meta = window === window.top && document.querySelector('meta[property="og:image"], meta[property="og:image:url"], meta[name="twitter:image"]');
+    const og = meta ? abs(meta.content || '') : '';
+    if (!videos.length && !og) return;
+    const key = JSON.stringify([videos, og]);
+    if (key === lastInfo) return;
+    lastInfo = key;
+    send({ type: 'page-info', videos, og });
   }
 
   const schedule = () => {
@@ -60,7 +97,7 @@
   };
 
   new MutationObserver((records) => {
-    if (fullScan) return; // pełny skan i tak jest zaplanowany
+    if (fullScan) return; // a full scan is scheduled anyway
     for (const r of records) {
       if (r.type === 'attributes') pending.add(r.target);
       else for (const n of r.addedNodes) if (n.nodeType === 1) pending.add(n);
@@ -77,17 +114,20 @@
     attributeFilter: ['src', 'href']
   });
 
-  // Odtwarzacz zaczął wczytywać film (currentSrc zmienia się bez zmiany atrybutów).
-  document.addEventListener(
-    'loadstart',
-    (e) => {
-      if (e.target instanceof Element) {
-        pending.add(e.target);
-        schedule();
-      }
-    },
-    true
-  );
+  // The player started loading a video (currentSrc changes without attribute changes),
+  // and once the metadata is loaded we know the duration.
+  for (const type of ['loadstart', 'loadedmetadata']) {
+    document.addEventListener(
+      type,
+      (e) => {
+        if (e.target instanceof Element) {
+          pending.add(e.target);
+          schedule();
+        }
+      },
+      true
+    );
+  }
 
   collect();
 })();

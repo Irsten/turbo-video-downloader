@@ -1,12 +1,12 @@
-// Test rozszerzenia w prawdziwym Chrome: ładuje rozszerzenie do tymczasowego profilu
-// (CDP przez pipe + Extensions.loadUnpacked, Chrome 126+) i sprawdza na lokalnych stronach:
-// wykrywanie i licznik, SPA, popup, content.js, menedżer (błędy, wznawianie także po zamknięciu),
-// łączenie w MP4 (odtwarzane w Chrome), napisy .srt, DASH, wybór audio i nagrywanie na żywo.
+// Extension test in a real Chrome: loads the extension into a temporary profile
+// (CDP over a pipe + Extensions.loadUnpacked, Chrome 126+) and checks on local pages:
+// detection and badge, SPA, popup, content.js, manager (errors, resuming also after closing it),
+// merging into MP4 (played in Chrome), .srt subtitles, DASH, audio choice, live recording,
 //
-// Uruchom: npm run test:e2e
-//   CHROME=ścieżka   – inny Chrome/Chromium (domyślnie szukany w typowych miejscach)
-//   HEADFUL=1        – pokaż okno przeglądarki
-//   KEEP=1           – nie usuwaj profilu i pobranych plików (ścieżka jest wypisywana)
+// Run: npm run test:e2e
+//   CHROME=path      – a different Chrome/Chromium (searched in the usual places by default)
+//   HEADFUL=1        – show the browser window
+//   KEEP=1           – keep the profile and the downloaded files (the path is printed)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,10 +22,10 @@ function check(name, ok, detail = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
 }
 
-// ---------------------------------------------------------------- materiały
+// ---------------------------------------------------------------- test material
 const M3U8 = 'application/vnd.apple.mpegurl';
 function mediaAssets() {
-  // HLS TS (obraz + dźwięk) z napisami WebVTT
+  // HLS TS (video + audio) with WebVTT subtitles
   const cc = { v: { cc: 0 }, a: { cc: 0 }, psi: 0 };
   for (let i = 0; i < 4; i++) assets[`/m/ts/seg${i}.ts`] = { type: 'video/mp2t', body: buildTs(fx, i * 2, i * 2 + 2, { cc }) };
   assets['/m/ts/v.m3u8'] = { type: M3U8, body: mediaPlaylist([0, 1, 2, 3].map((i) => ({ uri: `seg${i}.ts`, dur: 2 }))) };
@@ -33,10 +33,10 @@ function mediaAssets() {
   assets['/m/ts/subs.m3u8'] = { type: M3U8, body: mediaPlaylist([0, 1, 2, 3].map((i) => ({ uri: `sub${i}.vtt`, dur: 2 }))) };
   assets['/m/ts/master.m3u8'] = {
     type: M3U8,
-    body: '#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="s",NAME="Polskie",LANGUAGE="pl",URI="subs.m3u8"\n#EXT-X-STREAM-INF:BANDWIDTH=300000,RESOLUTION=320x180,SUBTITLES="s"\nv.m3u8\n'
+    body: '#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="s",NAME="Polish",LANGUAGE="pl",URI="subs.m3u8"\n#EXT-X-STREAM-INF:BANDWIDTH=300000,RESOLUTION=320x180,SUBTITLES="s"\nv.m3u8\n'
   };
 
-  // HLS fMP4 z dwiema ścieżkami audio (pl / en)
+  // HLS fMP4 with two audio tracks (pl / en)
   const v = splitFmp4(fx.recVideo);
   const a = splitFmp4(fx.recAudio);
   assets['/m/f/v-init.mp4'] = { body: v.init };
@@ -53,12 +53,12 @@ function mediaAssets() {
   assets['/m/f/master.m3u8'] = {
     type: M3U8,
     body:
-      '#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="Polski",LANGUAGE="pl",DEFAULT=YES,URI="pl.m3u8"\n' +
+      '#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="Polish",LANGUAGE="pl",DEFAULT=YES,URI="pl.m3u8"\n' +
       '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="English",LANGUAGE="en",URI="en.m3u8"\n' +
       '#EXT-X-STREAM-INF:BANDWIDTH=300000,RESOLUTION=320x180,AUDIO="a"\nv.m3u8\n'
   };
 
-  // DASH: SegmentTemplate + SegmentTimeline, napisy WebVTT
+  // DASH: SegmentTemplate + SegmentTimeline, WebVTT subtitles
   const timeline = (s) => s.times.map((t, i) => `<S t="${t}" d="${Math.round(s.durations[i] * s.timescale)}"/>`).join('');
   for (const [k, s] of [['v', v], ['a', a]]) {
     assets[`/m/d/${k}/init.mp4`] = { body: s.init };
@@ -80,7 +80,7 @@ function mediaAssets() {
     </Period></MPD>`
   };
 
-  // Transmisja na żywo: kolejne segmenty TS z ciągłą osią czasu.
+  // Live stream: consecutive TS segments with a continuous timeline.
   const liveCache = new Map();
   const liveCc = { v: { cc: 0 }, a: { cc: 0 }, psi: 0 };
   liveState.segments = (n) => {
@@ -88,19 +88,22 @@ function mediaAssets() {
     return liveCache.get(n);
   };
   assets['/big.mp4'] = { type: 'video/mp4', body: DATA };
+  assets['/m/ctx.mp4'] = { type: 'video/mp4', body: DATA };
+  assets['/m/clip.mp4'] = { type: 'video/mp4', body: fx.recVideo };
+  assets['/m/poster.png'] = { type: 'image/png', body: fs.readFileSync(path.join(EXT_ROOT, 'icons', 'icon128.png')) };
 }
 
 const fetcher = (urls) => `<script>(async () => { for (const u of ${JSON.stringify(urls)}) await (await fetch(u)).text(); })();</script>`;
-pages['/p/hls.html'] = `<!doctype html><title>Wideo HLS</title>${fetcher(['/m/ts/master.m3u8', '/m/ts/v.m3u8'])}`;
-pages['/p/fmp4.html'] = `<!doctype html><title>Wideo fMP4</title>${fetcher(['/m/f/master.m3u8', '/m/f/v.m3u8', '/m/f/pl.m3u8'])}`;
-pages['/p/dash.html'] = `<!doctype html><title>Wideo DASH</title>${fetcher(['/m/d/manifest.mpd'])}`;
-pages['/p/live.html'] = `<!doctype html><title>Transmisja</title>${fetcher(['/live/index.m3u8'])}`;
-pages['/p/track.html'] = `<!doctype html><title>Film z napisami</title>
-  <video src="/ok.mp4" preload="metadata" muted><track src="/m/d/pl.vtt" kind="subtitles" srclang="pl" label="Polski"></video>`;
+pages['/p/hls.html'] = `<!doctype html><title>HLS video</title><meta property="og:image" content="/m/poster.png">${fetcher(['/m/ts/master.m3u8', '/m/ts/v.m3u8'])}`;
+pages['/p/fmp4.html'] = `<!doctype html><title>fMP4 video</title>${fetcher(['/m/f/master.m3u8', '/m/f/v.m3u8', '/m/f/pl.m3u8'])}`;
+pages['/p/dash.html'] = `<!doctype html><title>DASH video</title>${fetcher(['/m/d/manifest.mpd'])}`;
+pages['/p/live.html'] = `<!doctype html><title>Live stream</title>${fetcher(['/live/index.m3u8'])}`;
+pages['/p/track.html'] = `<!doctype html><title>Video with subtitles</title>
+  <video src="/m/clip.mp4" poster="/m/poster.png" preload="metadata" muted><track src="/m/d/pl.vtt" kind="subtitles" srclang="pl" label="Polish"></video>`;
 pages['/player.html'] = `<!doctype html><title>player</title><body><script>
 window.check = async (src) => {
   const v = document.createElement('video'); v.muted = true; v.src = src; document.body.append(v);
-  await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('błąd wczytania: ' + (v.error && v.error.message))); setTimeout(() => rej(new Error('nie wczytał się w 10 s')), 10000); });
+  await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('load error: ' + (v.error && v.error.message))); setTimeout(() => rej(new Error('did not load within 10 s')), 10000); });
   const info = { duration: v.duration, width: v.videoWidth, height: v.videoHeight };
   v.playbackRate = 4; await Promise.race([v.play(), new Promise((r) => setTimeout(r, 5000))]);
   await Promise.race([new Promise((r) => (v.onended = r)), new Promise((r) => setTimeout(r, 15000))]);
@@ -117,7 +120,7 @@ const { send, evaluate, openTarget } = chrome;
 const downloaded = (prefix, ext) =>
   fs.readdirSync(chrome.downloads).find((f) => f.startsWith(prefix) && (!ext || f.endsWith(ext)) && !f.endsWith('.crdownload'));
 
-/** Odtwarza plik z folderu pobrań w Chrome i zwraca statystyki odtwarzania. */
+/** Plays a file from the downloads folder in Chrome and returns playback stats. */
 let player = null;
 async function play(name) {
   const route = '/dl/' + encodeURIComponent(name);
@@ -126,7 +129,7 @@ async function play(name) {
     player = await openTarget(`${base}/player.html`);
     await waitFor(() => evaluate(player.sessionId, `typeof window.check === 'function'`));
   }
-  // Chrome wstrzymuje wyciszone wideo w kartach w tle – odtwarzacz musi być na wierzchu.
+  // Chrome pauses muted videos in background tabs – the player has to be in front.
   await send('Page.bringToFront', {}, player.sessionId);
   return evaluate(player.sessionId, `check(${JSON.stringify(route)})`).catch((e) => ({ error: e.message }));
 }
@@ -148,7 +151,7 @@ try {
   const badgeOf = (tabId) => evaluate(sw, `chrome.action.getBadgeText({ tabId: ${tabId} })`);
   const storedOf = (tabId) => evaluate(sw, `chrome.storage.session.get('tab:${tabId}').then(o => Object.values(o['tab:${tabId}'] || {}))`);
 
-  /** Popup dla karty (popup bierze aktywną kartę – podmieniamy ją na testową). */
+  /** Popup for a tab (the popup takes the active tab – we substitute the test one). */
   async function openPopup(tabObj) {
     const p = await openTarget('about:blank');
     await send('Page.enable', {}, p.sessionId);
@@ -162,8 +165,8 @@ try {
   }
   const closeTarget = (t) => send('Target.closeTarget', { targetId: t.targetId }).catch(() => {});
 
-  // ================= A: wykrywanie + licznik bez wariantów HLS =================
-  pages['/video.html'] = `<!doctype html><html><head><meta charset="utf-8"><title>Film testowy A</title></head><body>
+  // ================= A: detection + badge without HLS variants =================
+  pages['/video.html'] = `<!doctype html><html><head><meta charset="utf-8"><title>Test video A</title></head><body>
     <video id="v" src="/ok.mp4" preload="auto" muted></video>
     <a id="link" href="/nic.html">link</a><div id="feed"></div>
     <script>
@@ -177,11 +180,11 @@ try {
   await waitFor(async () => (await storedOf(tabId)).filter((i) => i.hls).length >= 3, 10000);
   const itemsA = await storedOf(tabId);
   const hlsInfo = itemsA.filter((i) => i.kind === 'hls').map((i) => `${i.url.split('/').pop()}:${i.hls?.kind}`);
-  check('wykryto plik i 3 playlisty HLS', itemsA.length === 4, `${itemsA.length} pozycji; ${hlsInfo.join(', ')}`);
+  check('detected a file and 3 HLS playlists', itemsA.length === 4, `${itemsA.length} items; ${hlsInfo.join(', ')}`);
   const bA = await waitFor(async () => ((await badgeOf(tabId)) === '2' ? '2' : null), 5000);
-  check('licznik = 2 (MP4 + master), warianty HLS nie liczone', bA === '2', `licznik: "${await badgeOf(tabId)}"`);
+  check('badge = 2 (MP4 + master), HLS variants not counted', bA === '2', `badge: "${await badgeOf(tabId)}"`);
 
-  // ================= C: content.js – tylko nowe elementy =================
+  // ================= C: content.js – only new elements =================
   await evaluate(
     page.sessionId,
     `(() => {
@@ -197,7 +200,7 @@ try {
     const urls = (await storedOf(tabId)).map((i) => i.url);
     return ['/clip-late.mp4', '/clip-attr.webm', '/ok.mp4?v=src'].every((u) => urls.includes(base + u));
   }, 5000);
-  check('content.js: nowy link, zmieniony href i <source> w nowym węźle', !!domOk);
+  check('content.js: new link, changed href and <source> in a new node', !!domOk);
   await evaluate(
     page.sessionId,
     `(() => {
@@ -207,57 +210,57 @@ try {
     })()`
   );
   const massOk = await waitFor(async () => (await storedOf(tabId)).some((i) => i.url === base + '/clip-mass.mp4'), 5000);
-  check('content.js: masowa zmiana (>2000 węzłów) → pełny skan nadal wykrywa', !!massOk);
+  check('content.js: massive change (>2000 nodes) → a full scan still detects', !!massOk);
   const bC = await waitFor(async () => ((await badgeOf(tabId)) === '6' ? '6' : null), 5000);
-  check('licznik = 6 po dodaniu 4 filmów ze strony', bC === '6', `licznik: "${await badgeOf(tabId)}"`);
+  check('badge = 6 after adding 4 videos from the page', bC === '6', `badge: "${await badgeOf(tabId)}"`);
 
   // ================= B: SPA =================
-  await evaluate(page.sessionId, `history.pushState({}, '', '/video2.html'); document.title = 'Film B'; 1`);
+  await evaluate(page.sessionId, `history.pushState({}, '', '/video2.html'); document.title = 'Video B'; 1`);
   const bB = await waitFor(async () => ((await badgeOf(tabId)) === '' ? 'empty' : null), 5000);
-  check('SPA: po zmianie podstrony licznik = 0', bB === 'empty', `licznik: "${await badgeOf(tabId)}"`);
+  check('SPA: after changing the sub-page the badge = 0', bB === 'empty', `badge: "${await badgeOf(tabId)}"`);
   await evaluate(
     page.sessionId,
     `(() => { const v = document.createElement('video'); v.src = '/ok.mp4?v=2'; v.preload = 'auto'; v.muted = true; document.body.append(v); })()`
   );
   const bB2 = await waitFor(async () => ((await badgeOf(tabId)) === '1' ? '1' : null), 6000);
-  check('SPA: nowy film na nowej podstronie → licznik = 1', bB2 === '1', `licznik: "${await badgeOf(tabId)}"`);
+  check('SPA: a new video on the new sub-page → badge = 1', bB2 === '1', `badge: "${await badgeOf(tabId)}"`);
 
   const popupA = await openPopup(await evaluate(sw, `chrome.tabs.get(${tabId})`));
   const popupState = await waitFor(async () => {
     const s = await evaluate(
       popupA.sessionId,
       `({
-        current: [...document.querySelectorAll('#list > .item .name')].map(e => e.textContent),
+        current: [...document.querySelectorAll('#list > .item .fname')].map(e => e.value),
         earlierSummary: document.querySelector('#list > details.earlier > summary')?.textContent || null,
         earlierOpen: document.querySelector('#list > details.earlier')?.open,
-        earlier: [...document.querySelectorAll('#list > details.earlier .item .name')].map(e => e.textContent),
+        earlier: [...document.querySelectorAll('#list > details.earlier .item .fname')].map(e => e.value),
         hlsMeta: [...document.querySelectorAll('.item')].filter(e => e.querySelector('.badge.hls')).map(e => e.querySelector('.meta').textContent)
       })`
     );
-    return s.earlier.length && s.hlsMeta.every((m) => !m.includes('analizuję')) ? s : null;
+    return s.earlier.length && s.hlsMeta.every((m) => !m.includes('analyzing')) ? s : null;
   }, 8000);
-  check('popup: bieżąca podstrona = 1 film', popupState?.current.length === 1, JSON.stringify(popupState?.current));
+  check('popup: current sub-page = 1 video', popupState?.current.length === 1, JSON.stringify(popupState?.current));
   check(
-    'popup: sekcja „Wcześniej na tej karcie (6)”, zwinięta',
-    popupState?.earlierSummary === 'Wcześniej na tej karcie (6)' && popupState?.earlierOpen === false,
+    'popup: section "Earlier on this tab (6)", collapsed',
+    popupState?.earlierSummary === 'Earlier on this tab (6)' && popupState?.earlierOpen === false,
     `${popupState?.earlierSummary}, open=${popupState?.earlierOpen}`
   );
   check(
-    'popup: warianty HLS ukryte (jest tylko master z wyborem jakości)',
-    popupState?.hlsMeta.length === 1 && popupState.hlsMeta[0].includes('2 jakości'),
+    'popup: HLS variants hidden (only the master with a quality choice)',
+    popupState?.hlsMeta.length === 1 && popupState.hlsMeta[0].includes('2 qualities'),
     JSON.stringify(popupState?.hlsMeta)
   );
   await evaluate(
     popupA.sessionId,
     `(() => { const d = document.querySelector('details.earlier'); d.open = true;
-      const item = [...d.querySelectorAll('.item')].find(e => e.querySelector('.name').title.endsWith('/ok.mp4'));
+      const item = [...d.querySelectorAll('.item')].find(e => e.querySelector('.src').title.endsWith('/ok.mp4'));
       item.querySelector('.actions button:not(.primary)').click(); })()`
   );
-  const named = await waitFor(() => downloaded('Film testowy A'), 10000);
-  check('popup: wcześniejszy film nazwany tytułem swojej podstrony', !!named, `plik: ${named}`);
+  const named = await waitFor(() => downloaded('Test video A'), 10000);
+  check('popup: an earlier video named after the title of its own sub-page', !!named, `file: ${named}`);
   await closeTarget(popupA);
 
-  // ================= D: menedżer – błędy i wznawianie =================
+  // ================= D: manager – errors and resuming =================
   let mgr = await openTarget(`chrome-extension://${extId}/manager.html`);
   await waitFor(() => evaluate(mgr.sessionId, `!!document.querySelector('#add-url')`));
   const add = (url) =>
@@ -290,33 +293,33 @@ try {
   let t = Date.now();
   await add(`${base}/expired.mp4`);
   const cExp = await until('/expired.mp4', /error/, 10000);
-  check('menedżer: strona HTML zamiast filmu → czytelny błąd', /stronę WWW/.test(cExp?.status || ''), `${Date.now() - t} ms: ${cExp?.status}`);
+  check('manager: HTML page instead of the video → a clear error', /web page instead of the video/.test(cExp?.status || ''), `${Date.now() - t} ms: ${cExp?.status}`);
 
   t = Date.now();
   await add(`${base}/forbid.mp4`);
   const cFor = await until('/forbid.mp4', /error/, 15000);
-  check('menedżer: 403 → szybki błąd z podpowiedzią', /Brak dostępu \(HTTP 403\)/.test(cFor?.status || '') && Date.now() - t < 5000, `${Date.now() - t} ms`);
+  check('manager: 403 → a quick error with a hint', /Access denied \(HTTP 403\)/.test(cFor?.status || '') && Date.now() - t < 5000, `${Date.now() - t} ms`);
 
   state.flakyBudget = 7 * 1024 * 1024;
   resetCounters();
   await add(`${base}/flaky.mp4`);
   const cFl = await until('/flaky.mp4', /error/, 15000);
   check(
-    'menedżer: po błędzie „Wznów” i informacja o zachowanych danych',
-    cFl?.buttons.includes('Wznów') && /Zachowano/.test(cFl?.stats || ''),
+    'manager: after an error "Resume" and info about the kept data',
+    cFl?.buttons.includes('Resume') && /Kept/.test(cFl?.stats || ''),
     `${cFl?.stats} | [${cFl?.buttons}]`
   );
   await sleep(300);
   state.flakyBudget = Infinity;
   resetCounters();
-  await clickIn('/flaky.mp4', 'Wznów');
+  await clickIn('/flaky.mp4', 'Resume');
   const cDone = await until('/flaky.mp4', /done/, 30000);
   const flakyFile = cDone && (await waitFor(() => downloaded('flaky', '.mp4'), 10000));
-  check('menedżer: „Wznów” kończy pobieranie, plik identyczny', flakyFile && fs.readFileSync(path.join(chrome.downloads, flakyFile)).equals(DATA), flakyFile);
+  check('manager: "Resume" finishes the download, identical file', flakyFile && fs.readFileSync(path.join(chrome.downloads, flakyFile)).equals(DATA), flakyFile);
   const refetched = (state.served['/flaky.mp4'] || 0) - 1;
-  check('menedżer: wznowienie nie pobiera od zera', refetched > 0 && refetched < SIZE, `drugi raz pobrano ${refetched} z ${SIZE} B`);
+  check('manager: resuming does not start from scratch', refetched > 0 && refetched < SIZE, `second time fetched ${refetched} of ${SIZE} B`);
 
-  // ================= E: zamknięcie menedżera w trakcie i wznowienie =================
+  // ================= E: closing the manager mid-download and resuming =================
   Object.assign(state, { slow: true, slowChunk: 32 * 1024, slowDelay: 25 });
   resetCounters();
   await add(`${base}/big.mp4`);
@@ -326,134 +329,157 @@ try {
     const got = (job?.resume?.chunks || []).reduce((n, c) => n + c.received, 0);
     return got > SIZE * 0.3 ? got : null;
   }, 20000);
+  const mgrTitle = await evaluate(mgr.sessionId, 'document.title');
+  check('progress in the manager tab title', /^\d+% · /.test(mgrTitle), mgrTitle);
   await closeTarget(mgr);
   await sleep(800);
   const afterClose = await evaluate(sw, `chrome.storage.local.get(null)`);
   const savedJob = Object.values(afterClose).find((v) => v?.job?.url?.endsWith('/big.mp4'));
-  check('zamknięcie menedżera: zadanie zostaje zapisane', savedJob?.status === 'running', `zapisane ${halfway} B, status ${savedJob?.status}`);
+  check('closing the manager: the job stays saved', savedJob?.status === 'running', `saved ${halfway} B, status ${savedJob?.status}`);
   Object.assign(state, { slow: false, slowChunk: 256 * 1024, slowDelay: 15 });
   resetCounters();
   mgr = await openTarget(`chrome-extension://${extId}/manager.html`);
   const cBig = await until('/big.mp4', /done|error/, 30000);
   const bigFile = cBig?.cls.includes('done') && (await waitFor(() => downloaded('big', '.mp4'), 10000));
   const bigSame = bigFile && fs.readFileSync(path.join(chrome.downloads, bigFile)).equals(DATA);
-  check('po ponownym otwarciu menedżer sam dokończył pobieranie, plik identyczny', bigSame, `${cBig?.status}; ${bigFile}`);
+  check('after reopening, the manager finished the download by itself, identical file', bigSame, `${cBig?.status}; ${bigFile}`);
   const bigRefetched = state.served['/big.mp4'] || 0;
-  check('…i dociągnął tylko brakującą część', bigRefetched > 0 && bigRefetched < SIZE * 0.8, `${bigRefetched} z ${SIZE} B`);
-  await evaluate(mgr.sessionId, `document.querySelector('#clear-finished').click()`); // błędne bez danych + gotowe
+  check('…and fetched only the missing part', bigRefetched > 0 && bigRefetched < SIZE * 0.8, `${bigRefetched} of ${SIZE} B`);
+  await evaluate(mgr.sessionId, `document.querySelector('#clear-finished').click()`); // failed without data + done
   await sleep(500);
   const leftover = await evaluate(mgr.sessionId, `navigator.storage.getDirectory().then(async (d) => { const n = []; for await (const k of d.keys()) n.push(k); return n; })`);
-  check('pliki robocze usunięte (po zapisie i po usunięciu zadań)', leftover.length === 0, JSON.stringify(leftover));
+  check('working files removed (after saving and after removing jobs)', leftover.length === 0, JSON.stringify(leftover));
 
-  // ================= F: HLS TS + napisy przez popup → jeden MP4 + .srt =================
+  // ================= F: HLS TS + subtitles through the popup → one MP4 + .srt =================
   await openTarget(`${base}/p/hls.html`);
   const tabH = await tabOf('/p/hls.html');
   await waitFor(async () => (await storedOf(tabH.id)).some((i) => i.url.endsWith('/m/ts/master.m3u8')), 8000);
   const pH = await openPopup(tabH);
   const subsSelect = await waitFor(() =>
-    evaluate(pH.sessionId, `(() => { const s = [...document.querySelectorAll('.opts select')].find(s => s.title.startsWith('Napisy')); if (!s) return null;
+    evaluate(pH.sessionId, `(() => { const s = [...document.querySelectorAll('.opts select')].find(s => s.title.startsWith('Subtitles')); if (!s) return null;
       s.value = '0'; s.dispatchEvent(new Event('change')); return [...s.options].map(o => o.textContent); })()`)
   , 8000);
-  check('popup HLS: wybór napisów', subsSelect?.includes('Napisy: Polskie (PL)'), JSON.stringify(subsSelect));
+  check('popup HLS: choice of subtitles', subsSelect?.includes('Subtitles: Polish (PL)'), JSON.stringify(subsSelect));
+  const hlsUi = await evaluate(pH.sessionId, `(() => { const it = document.querySelector('.item'); return { name: it.querySelector('.fname').value,
+    quality: [...it.querySelectorAll('.opts select[title^="Quality"] option')].map(o => o.textContent), thumb: it.querySelector('.thumb img')?.getAttribute('src') || null,
+    meta: it.querySelector('.meta').textContent }; })()`);
+  check(
+    'popup: name from the template, estimated size per quality, thumbnail (og:image), duration',
+    hlsUi.name === 'HLS video [180p]' && /· ~\d/.test(hlsUi.quality[0]) && hlsUi.thumb?.endsWith('/m/poster.png') && hlsUi.meta.includes('0:08'),
+    JSON.stringify(hlsUi)
+  );
   await evaluate(pH.sessionId, `document.querySelector('.item .actions button.primary').click()`);
   const cH = await until('/m/ts/master.m3u8', /done|error/, 30000);
   check('HLS TS → zapisane', cH?.cls.includes('done'), `${cH?.status} | ${cH?.stats}`);
-  const hlsMp4 = downloaded('Wideo HLS', '.mp4');
+  const hlsMp4 = downloaded('HLS video', '.mp4');
   const hlsPlay = hlsMp4 && (await play(hlsMp4));
-  check('HLS TS → jeden plik MP4, odtwarza się z obrazem i dźwiękiem', playsWell(hlsPlay), `${hlsMp4}: ${JSON.stringify(hlsPlay)}`);
-  const srtName = downloaded('Wideo HLS', '.srt');
+  check('HLS TS → one MP4 file, plays with video and audio', playsWell(hlsPlay), `${hlsMp4}: ${JSON.stringify(hlsPlay)}`);
+  const srtName = downloaded('HLS video', '.srt');
   const srt = srtName ? fs.readFileSync(path.join(chrome.downloads, srtName), 'utf8') : '';
   check(
-    'napisy HLS → .srt wyrównany do początku filmu',
-    srtName?.endsWith('.pl.srt') && srt.includes('00:00:00,500 --> 00:00:01,900') && srt.includes('Napis <i>pochyły</i> & drugi') && (srt.match(/-->/g) || []).length === CUES.length,
+    'HLS subtitles → .srt aligned to the start of the video',
+    srtName?.endsWith('.pl.srt') && srt.includes('00:00:00,500 --> 00:00:01,900') && srt.includes('Italic <i>text</i> & more') && (srt.match(/-->/g) || []).length === CUES.length,
     srtName
   );
   await closeTarget(pH);
 
-  // ================= G: HLS fMP4 z wyborem ścieżki audio =================
+  // ================= G: HLS fMP4 with a choice of audio track =================
   await openTarget(`${base}/p/fmp4.html`);
   const tabF = await tabOf('/p/fmp4.html');
   await waitFor(async () => (await storedOf(tabF.id)).some((i) => i.url.endsWith('/m/f/master.m3u8')), 8000);
   const pF = await openPopup(tabF);
   const audioSel = await waitFor(() =>
-    evaluate(pF.sessionId, `(() => { const s = [...document.querySelectorAll('.opts select')].find(s => s.title === 'Ścieżka dźwiękowa'); if (!s) return null;
+    evaluate(pF.sessionId, `(() => { const s = [...document.querySelectorAll('.opts select')].find(s => s.title === 'Audio track'); if (!s) return null;
       s.value = '1'; s.dispatchEvent(new Event('change')); return [...s.options].map(o => o.textContent); })()`)
   , 8000);
-  check('popup HLS: wybór ścieżki audio', JSON.stringify(audioSel) === JSON.stringify(['Audio: Polski (PL)', 'Audio: English (EN)']), JSON.stringify(audioSel));
+  check('popup HLS: choice of audio track', JSON.stringify(audioSel) === JSON.stringify(['Audio: Polish (PL)', 'Audio: English (EN)']), JSON.stringify(audioSel));
+  await evaluate(pF.sessionId, `(() => { const i = document.querySelector('.item .fname'); i.value = 'My name'; i.dispatchEvent(new Event('input')); })()`);
   resetCounters();
   await evaluate(pF.sessionId, `document.querySelector('.item .actions button.primary').click()`);
   const cF = await until('/m/f/master.m3u8', /done|error/, 30000);
   const enUsed = (state.requests['/m/f/en0.m4s'] || 0) > 0 && !state.requests['/m/f/pl0.m4s'];
-  check('fMP4 + wybrane audio EN → pobrana ścieżka angielska', cF?.cls.includes('done') && enUsed, `${cF?.status}`);
-  const fName = downloaded('Wideo fMP4', '.mp4');
+  check('fMP4 + chosen EN audio → the English track was downloaded', cF?.cls.includes('done') && enUsed, `${cF?.status}`);
+  const fName = downloaded('My name', '.mp4');
+  check('popup: changed file name', fName === 'My name.mp4', fName);
   const fPlay = fName && (await play(fName));
-  check('HLS fMP4 + osobne audio → jeden MP4, odtwarza się', playsWell(fPlay), `${fName}: ${JSON.stringify(fPlay)}`);
+  check('HLS fMP4 + separate audio → one MP4, plays', playsWell(fPlay), `${fName}: ${JSON.stringify(fPlay)}`);
   await closeTarget(pF);
 
-  // ================= H: DASH przez menedżer =================
+  // ================= H: DASH through the manager =================
   await add(`${base}/m/d/manifest.mpd`);
   const cD = await until('/m/d/manifest.mpd', /done|error/, 30000);
   const dName = downloaded('manifest', '.mp4');
   const dPlay = dName && (await play(dName));
-  check('DASH → jeden MP4, odtwarza się', cD?.cls.includes('done') && playsWell(dPlay), `${cD?.status}: ${JSON.stringify(dPlay)}`);
+  check('DASH → one MP4, plays', cD?.cls.includes('done') && playsWell(dPlay), `${cD?.status}: ${JSON.stringify(dPlay)}`);
 
   await openTarget(`${base}/p/dash.html`);
   const tabD = await tabOf('/p/dash.html');
   await waitFor(async () => (await storedOf(tabD.id)).some((i) => i.kind === 'dash'), 8000);
+  await evaluate(mgr.sessionId, `(() => { const t = document.querySelector('#template'); t.value = '{site} - {title}'; t.dispatchEvent(new Event('change')); })()`);
+  await sleep(300);
+  const pTpl = await openPopup(tabD);
+  const tplName = await waitFor(() => evaluate(pTpl.sessionId, `document.querySelector('.item .fname')?.value || null`), 8000);
+  check('name template from the manager settings', tplName === '127.0.0.1 - DASH video', tplName);
+  await closeTarget(pTpl);
+  await evaluate(mgr.sessionId, `(() => { const t = document.querySelector('#template'); t.value = ''; t.dispatchEvent(new Event('change')); })()`);
+  await sleep(300);
   const pD = await openPopup(tabD);
   const dashUi = await waitFor(() =>
-    evaluate(pD.sessionId, `(() => { const it = [...document.querySelectorAll('.item')].find(e => e.querySelector('.badge.dash')); if (!it || it.textContent.includes('analizuję')) return null;
-      const q = it.querySelector('.actions select'); const s = [...it.querySelectorAll('.opts select')].find(s => s.title.startsWith('Napisy'));
+    evaluate(pD.sessionId, `(() => { const it = [...document.querySelectorAll('.item')].find(e => e.querySelector('.badge.dash')); if (!it || it.textContent.includes('analyzing')) return null;
+      const q = it.querySelector('.opts select[title^="Quality"]'); const s = [...it.querySelectorAll('.opts select')].find(s => s.title.startsWith('Subtitles'));
       if (s) { s.value = '0'; s.dispatchEvent(new Event('change')); }
       return { quality: q && [...q.options].map(o => o.textContent), subs: s && [...s.options].map(o => o.textContent), meta: it.querySelector('.meta').textContent }; })()`)
   , 8000);
-  check('popup DASH: jakość i napisy do wyboru', dashUi?.quality?.[0] === '180p · 0.20 Mb/s' && dashUi?.subs?.includes('Napisy: PL'), JSON.stringify(dashUi));
+  check('popup DASH: choice of quality and subtitles', dashUi?.quality?.[0]?.startsWith('180p · 0.20 Mb/s · ~') && dashUi?.subs?.includes('Subtitles: PL'), JSON.stringify(dashUi));
   await evaluate(pD.sessionId, `[...document.querySelectorAll('.item')].find(e => e.querySelector('.badge.dash')).querySelector('.actions button.primary').click()`);
-  const cD2 = await until('Wideo DASH', /done|error/, 30000) || (await until('manifest.mpd · 180p', /done|error/, 1));
-  const d2 = downloaded('Wideo DASH', '.mp4');
-  const d2Srt = downloaded('Wideo DASH', '.srt');
-  check('DASH z popupu → MP4 + napisy .srt', !!d2 && d2Srt === 'Wideo DASH [180p].pl.srt', `${d2} ${d2Srt}`);
+  const cD2 = await until('DASH video', /done|error/, 30000) || (await until('manifest.mpd · 180p', /done|error/, 1));
+  const d2 = downloaded('DASH video', '.mp4');
+  const d2Srt = downloaded('DASH video', '.srt');
+  check('DASH from the popup → MP4 + .srt subtitles', !!d2 && d2Srt === 'DASH video [180p].pl.srt', `${d2} ${d2Srt}`);
   await closeTarget(pD);
 
-  // ================= I: napisy z <track> =================
+  // ================= I: subtitles from <track> =================
   await openTarget(`${base}/p/track.html`);
   const tabT = await tabOf('/p/track.html');
   await waitFor(async () => (await storedOf(tabT.id)).some((i) => i.subs?.length), 8000);
+  await waitFor(async () => Object.values((await evaluate(sw, `chrome.storage.session.get('info:${tabT.id}')`))['info:' + tabT.id]?.videos || {}).some((v) => v.duration), 8000);
   const pT = await openPopup(tabT);
+  const trackUi = await waitFor(() => evaluate(pT.sessionId, `(() => { const it = document.querySelector('.item'); return it && { thumb: it.querySelector('.thumb img')?.getAttribute('src') || null, meta: it.querySelector('.meta').textContent }; })()`), 8000);
+  check('popup: poster and duration of the <video>', trackUi?.thumb?.endsWith('/m/poster.png') && trackUi.meta.includes('0:08'), JSON.stringify(trackUi));
   const trackSel = await waitFor(() =>
     evaluate(pT.sessionId, `(() => { const s = document.querySelector('.opts select'); if (!s) return null;
       s.value = '0'; s.dispatchEvent(new Event('change')); return [...s.options].map(o => o.textContent); })()`)
   , 8000);
-  check('popup: napisy z <track> do wyboru', trackSel?.includes('Napisy: Polski'), JSON.stringify(trackSel));
+  check('popup: subtitles from <track> to choose', trackSel?.includes('Subtitles: Polish'), JSON.stringify(trackSel));
   await evaluate(pT.sessionId, `document.querySelector('.item .actions button.primary').click()`);
-  const cT = await until('/ok.mp4', /done|error/, 30000);
-  const tSrt = downloaded('Film z napisami', '.srt');
-  check('<track> → film + napisy .srt', cT?.cls.includes('done') && tSrt === 'Film z napisami.pl.srt' && !!downloaded('Film z napisami', '.mp4'), `${cT?.status} ${tSrt}`);
+  const cT = await until('/m/clip.mp4', /done|error/, 30000);
+  const tSrt = downloaded('Video with subtitles', '.srt');
+  check('<track> → video + .srt subtitles', cT?.cls.includes('done') && tSrt === 'Video with subtitles [180p].pl.srt' && !!downloaded('Video with subtitles', '.mp4'), `${cT?.status} ${tSrt}`);
   await closeTarget(pT);
 
-  // ================= J: nagrywanie transmisji na żywo =================
+  // ================= J: recording a live stream =================
   liveReset({ step: 700 });
   await openTarget(`${base}/p/live.html`);
   const tabL = await tabOf('/p/live.html');
   await waitFor(async () => (await storedOf(tabL.id)).some((i) => i.url.endsWith('/live/index.m3u8')), 8000);
   const pL = await openPopup(tabL);
-  const recBtn = await waitFor(() => evaluate(pL.sessionId, `document.querySelector('.item .actions button.primary')?.textContent === '⏺ Nagrywaj' && document.querySelector('.badge.live') ? 'ok' : null`), 8000);
-  check('popup: transmisja → przycisk „⏺ Nagrywaj”', recBtn === 'ok');
+  const recBtn = await waitFor(() => evaluate(pL.sessionId, `document.querySelector('.item .actions button.primary')?.textContent === '⏺ Record' && document.querySelector('.badge.live') ? 'ok' : null`), 8000);
+  check('popup: live stream → "⏺ Record" button', recBtn === 'ok');
   await evaluate(pL.sessionId, `document.querySelector('.item .actions button.primary').click()`);
   const cRec = await until('/live/index.m3u8', /recording/, 10000);
-  check('menedżer: trwa nagrywanie', cRec?.cls.includes('recording') && cRec.buttons.includes('⏹ Zatrzymaj i zapisz'), `${cRec?.status} [${cRec?.buttons}]`);
+  check('manager: recording in progress', cRec?.cls.includes('recording') && cRec.buttons.includes('⏹ Stop and save'), `${cRec?.status} [${cRec?.buttons}]`);
   await sleep(4500);
-  await clickIn('/live/index.m3u8', '⏹ Zatrzymaj i zapisz');
+  await clickIn('/live/index.m3u8', '⏹ Stop and save');
   const cLive = await until('/live/index.m3u8', /done|error/, 30000);
-  const lName = downloaded('Transmisja', '.mp4');
+  const lName = downloaded('Live stream', '.mp4');
   const lPlay = lName && (await play(lName));
-  check('nagranie → MP4 z obrazem i dźwiękiem, ciągłe', cLive?.cls.includes('done') && playsWell(lPlay, 5.5), `${cLive?.stats} | ${JSON.stringify(lPlay)}`);
+  check('recording → MP4 with video and audio, continuous', cLive?.cls.includes('done') && playsWell(lPlay, 5.5), `${cLive?.stats} | ${JSON.stringify(lPlay)}`);
   await closeTarget(pL);
 
-  // ================= K: nagrywanie przerwane zamknięciem menedżera → „Zapisz nagrane” =================
+  // ================= K: recording interrupted by closing the manager → "Save recording" =================
   liveReset({ step: 700 });
   const pL2 = await openPopup(tabL);
-  await waitFor(() => evaluate(pL2.sessionId, `document.querySelector('.item .actions button.primary')?.textContent === '⏺ Nagrywaj' || null`), 8000);
+  await waitFor(() => evaluate(pL2.sessionId, `document.querySelector('.item .actions button.primary')?.textContent === '⏺ Record' || null`), 8000);
   await evaluate(pL2.sessionId, `document.querySelector('.item .actions button.primary').click()`);
   await closeTarget(pL2);
   await until('/live/index.m3u8', /recording/, 10000);
@@ -463,16 +489,44 @@ try {
   mgr = await openTarget(`chrome-extension://${extId}/manager.html`);
   const cInt = await until('/live/index.m3u8', /interrupted/, 10000);
   check(
-    'po ponownym otwarciu: nagranie przerwane z „Zapisz nagrane” / „Nagrywaj dalej”',
-    cInt?.cls.includes('interrupted') && cInt.buttons.includes('Zapisz nagrane') && cInt.buttons.includes('Nagrywaj dalej'),
+    'after reopening: recording interrupted with "Save recording" / "Keep recording"',
+    cInt?.cls.includes('interrupted') && cInt.buttons.includes('Save recording') && cInt.buttons.includes('Keep recording'),
     `${cInt?.status} [${cInt?.buttons}]`
   );
-  const before = fs.readdirSync(chrome.downloads).filter((f) => f.startsWith('Transmisja')).length;
-  await clickIn('/live/index.m3u8', 'Zapisz nagrane');
+  const before = fs.readdirSync(chrome.downloads).filter((f) => f.startsWith('Live stream')).length;
+  await clickIn('/live/index.m3u8', 'Save recording');
   const cSaved = await until('/live/index.m3u8', /done|error/, 30000);
-  const savedName = await waitFor(() => fs.readdirSync(chrome.downloads).filter((f) => f.startsWith('Transmisja') && f.endsWith('.mp4')).length > before && fs.readdirSync(chrome.downloads).filter((f) => f.startsWith('Transmisja') && f.endsWith('.mp4')).sort().pop(), 10000);
+  const savedName = await waitFor(() => fs.readdirSync(chrome.downloads).filter((f) => f.startsWith('Live stream') && f.endsWith('.mp4')).length > before && fs.readdirSync(chrome.downloads).filter((f) => f.startsWith('Live stream') && f.endsWith('.mp4')).sort().pop(), 10000);
   const savedPlay = savedName && (await play(savedName));
-  check('„Zapisz nagrane” → MP4 z nagranym fragmentem', cSaved?.cls.includes('done') && playsWell(savedPlay, 3), `${savedName}: ${JSON.stringify(savedPlay)}`);
+  check('"Save recording" → MP4 with the recorded part', cSaved?.cls.includes('done') && playsWell(savedPlay, 3), `${savedName}: ${JSON.stringify(savedPlay)}`);
+
+  // ================= L: context menu, notification, history =================
+  await send('Page.bringToFront', {}, page.sessionId); // manager in the background → notification
+  const ctxJob = await evaluate(sw, `tvdDownloadFromContext({ menuItemId: 'tvd-link', linkUrl: '${base}/m/ctx.mp4', pageUrl: '${base}/p/hls.html' }, ${JSON.stringify(tabH)})`);
+  check('context menu: link → a job named from the template', ctxJob?.filename === 'HLS video', ctxJob?.filename);
+  const cCtx = await until('/m/ctx.mp4', /done|error/, 30000);
+  const hidden = await evaluate(mgr.sessionId, 'document.hidden');
+  check('… downloaded to "HLS video.mp4"', cCtx?.cls.includes('done') && fs.existsSync(path.join(chrome.downloads, 'HLS video.mp4')), cCtx?.status);
+  const note = await waitFor(async () => Object.keys(await evaluate(sw, 'chrome.notifications.getAll()')).find((k) => k.startsWith('tvd-done:')) || null, 5000);
+  check('notification when done while the manager is in the background', !!note, `${note} (manager hidden: ${hidden})`);
+  const blobRes = await evaluate(sw, `tvdDownloadFromContext({ menuItemId: 'tvd-video', srcUrl: 'blob:${base}/x', pageUrl: '${base}/p/hls.html' }, ${JSON.stringify(tabH)})`);
+  check('context menu: a video played from a stream (blob:) creates no job', blobRes === null);
+
+  await send('Page.bringToFront', {}, mgr.sessionId);
+  await evaluate(mgr.sessionId, 'location.reload(), 1');
+  const hist = await waitFor(async () => {
+    const h = await evaluate(mgr.sessionId, `(() => { const rows = [...document.querySelectorAll('#history .entry')];
+      return rows.length ? rows.map(r => ({ name: r.querySelector('.name').textContent, show: !r.querySelector('button').disabled })) : null; })()`);
+    return h && h.some((x) => x.show) ? h : null;
+  }, 10000);
+  check(
+    'history survived reloading the manager, "Show" works',
+    hist?.length >= 10 && hist.some((h) => h.name.startsWith('flaky.mp4') && h.show) && hist[0].name.startsWith('HLS video.mp4'),
+    `${hist?.length} entries; ${hist?.slice(0, 3).map((h) => h.name).join(' | ')}`
+  );
+  await evaluate(mgr.sessionId, `[...document.querySelectorAll('#history .entry')].find(r => r.querySelector('.name').textContent.startsWith('flaky.mp4')).querySelectorAll('button')[1].click()`);
+  const again = await waitFor(() => downloaded('flaky (1)', '.mp4'), 30000);
+  check('history: "Download again"', !!again, again);
 } catch (e) {
   check('przebieg testu', false, e.stack);
   console.log(chrome.stderr().slice(-3000));

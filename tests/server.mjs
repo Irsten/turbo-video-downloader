@@ -1,10 +1,10 @@
-// Lokalny serwer testowy: pliki z Range, HLS, wstrzykiwanie błędów.
+// Local test server: files with Range, HLS, DASH, live streams, injected errors.
 import http from 'node:http';
 import crypto from 'node:crypto';
 
 export const SIZE = 20 * 1024 * 1024 + 12345;
 export const DATA = crypto.randomBytes(SIZE);
-DATA[0] = 0x00; // prawdziwy kontener nie zaczyna się od "<"
+DATA[0] = 0x00; // a real container never starts with "<"
 
 const segData = new Map();
 export function segment(name) {
@@ -12,7 +12,7 @@ export function segment(name) {
     const b = crypto.createHash('sha256').update(name).digest();
     const buf = Buffer.alloc(150 * 1024 + (b[0] << 4));
     for (let i = 0; i < buf.length; i++) buf[i] = b[i % 32] ^ (i & 0xff);
-    buf[0] = 0x47; // bajt synchronizacji TS
+    buf[0] = 0x47; // TS sync byte
     segData.set(name, buf);
   }
   return segData.get(name);
@@ -31,11 +31,11 @@ export const MASTER =
   '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,AUDIO="aud"\nv360.m3u8\n';
 
 export const state = {
-  flakyBudget: Infinity, // ile bajtów /flaky.mp4 obsłuży, zanim zacznie odpowiadać 404
-  served: {}, // ścieżka -> bajty treści wysłane
-  requests: {}, // ścieżka -> liczba żądań
-  failSegments: new Map(), // nazwa segmentu -> status (np. 404, 403) albo 'html'
-  slow: false, // wolne łącze: slowChunk bajtów co slowDelay ms na połączenie
+  flakyBudget: Infinity, // how many bytes /flaky.mp4 serves before it starts answering 404
+  served: {}, // path -> body bytes sent
+  requests: {}, // path -> number of requests
+  failSegments: new Map(), // segment name -> status (e.g. 404, 403) or 'html'
+  slow: false, // slow connection: slowChunk bytes every slowDelay ms per connection
   slowChunk: 256 * 1024,
   slowDelay: 15
 };
@@ -44,7 +44,7 @@ export function resetCounters() {
   state.requests = {};
 }
 
-const HTML = '<!doctype html><html><body>Zaloguj się, aby obejrzeć film</body></html>';
+const HTML = '<!doctype html><html><body>Sign in to watch the video</body></html>';
 
 function sendRange(req, res, buf, type, { ignoreRange = false, path } = {}) {
   const m = /bytes=(\d+)-(\d*)/.exec(req.headers.range || '');
@@ -72,7 +72,7 @@ function sendRange(req, res, buf, type, { ignoreRange = false, path } = {}) {
     count(body.length);
     return res.end(body);
   }
-  // Wolne łącze: state.slowChunk bajtów co state.slowDelay ms.
+  // Slow connection: state.slowChunk bytes every state.slowDelay ms.
   let pos = 0;
   const step = () => {
     if (res.destroyed) return;
@@ -140,15 +140,15 @@ export function startServer() {
       return sendRange(req, res, segment(seg[1]), 'video/mp2t', { path: '/hls/*' });
     }
 
-    // ---------- transmisja na żywo: co LIVE_STEP ms pojawia się nowy segment, okno 3 segmentów ----------
+    // ---------- live stream: a new segment every liveState.step ms, a window of 3 segments ----------
     if (p.startsWith('/live/')) return live(req, res, p);
 
-    // ---------- strony do testów rozszerzenia ----------
+    // ---------- pages for the extension tests ----------
     if (pages[p]) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(pages[p]);
     }
-    // ---------- dowolne pliki (testy multimediów) ----------
+    // ---------- arbitrary files (media tests) ----------
     const a = assets[p];
     if (a) {
       if (a.fail) {
@@ -165,18 +165,18 @@ export function startServer() {
 }
 
 export const pages = {};
-/** ścieżka -> { type, body (Buffer | string | () => …), fail (status) } */
+/** path -> { type, body (Buffer | string | () => …), fail (status) } */
 export const assets = {};
 
-// ---------------- transmisja na żywo ----------------
+// ---------------- live stream ----------------
 export const liveState = {
   start: 0,
-  step: 700, // ms na segment (krótko, żeby test trwał chwilę)
-  ended: false, // ENDLIST po zakończeniu
-  segments: (n) => segment(`live/seg${n}.ts`), // treść segmentu nr n
+  step: 700, // ms per segment (short, so the test doesn't take long)
+  ended: false, // ENDLIST once finished
+  segments: (n) => segment(`live/seg${n}.ts`), // contents of segment no. n
   window: 3,
   ext: 'ts',
-  map: null // np. 'init.mp4' dla fMP4
+  map: null // e.g. 'init.mp4' for fMP4
 };
 export function liveReset(opts = {}) {
   Object.assign(liveState, { start: Date.now(), ended: false, window: 3, ext: 'ts', map: null }, opts);
