@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Menedżer pobierania – Turbo Video Downloader</title>
+    <link rel="icon" href="icons/icon32.png" />
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 24px 16px 60px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      header h1 {
+        font-size: 18px;
+        margin: 0;
+      }
+      .logo {
+        width: 28px;
+        height: 28px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+      .settings {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 22px;
+        align-items: center;
+      }
+      .settings label {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .settings input[type='number'] {
+        width: 64px;
+      }
+      .add {
+        display: flex;
+        gap: 8px;
+      }
+      .add input {
+        flex: 1;
+        min-width: 0;
+      }
+      #jobs {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .job {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+      }
+      .job .top {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .job .title {
+        flex: 1;
+        min-width: 0;
+        font-weight: 600;
+      }
+      .job .status {
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .job.done .status {
+        color: var(--ok);
+      }
+      .job.error .status {
+        color: var(--err);
+      }
+      .bar {
+        height: 8px;
+        background: var(--panel-2);
+        border-radius: 99px;
+        overflow: hidden;
+        margin: 10px 0 8px;
+      }
+      .bar > div {
+        height: 100%;
+        width: 0;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        transition: width 0.25s;
+      }
+      .bar.indeterminate > div {
+        width: 30%;
+        animation: slide 1.2s infinite ease-in-out;
+      }
+      .job.done .bar > div {
+        background: var(--ok);
+      }
+      .job.error .bar > div {
+        background: var(--err);
+      }
+      @keyframes slide {
+        0% {
+          margin-left: -30%;
+        }
+        100% {
+          margin-left: 100%;
+        }
+      }
+      .stats {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .stats b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .job .buttons {
+        display: flex;
+        gap: 6px;
+      }
+      .hint {
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--warn);
+      }
+      .hint code {
+        display: block;
+        margin-top: 4px;
+        padding: 6px 8px;
+        background: #111215;
+        border-radius: 6px;
+        color: #d6d9e0;
+        user-select: all;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .empty {
+        text-align: center;
+        color: var(--muted);
+        padding: 30px;
+      }
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 18px 0 10px;
+      }
+      .toolbar h2 {
+        font-size: 14px;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img class="logo" src="icons/icon48.png" alt="" />
+        <h1>Menedżer pobierania</h1>
+      </header>
+
+      <section class="panel settings" id="settings">
+        <label title="Ile równoległych połączeń HTTP na jeden plik (MP4/WebM). Opera dla serwerów HTTP/1.1 otwiera max 6 połączeń na host.">
+          Połączenia na plik <input type="number" id="connections" min="1" max="16" />
+        </label>
+        <label title="Ile segmentów HLS pobierać jednocześnie">
+          Segmenty HLS naraz <input type="number" id="hlsConcurrency" min="1" max="32" />
+        </label>
+        <label title="Ile filmów pobierać jednocześnie">
+          Pobrania naraz <input type="number" id="maxParallel" min="1" max="6" />
+        </label>
+        <label><input type="checkbox" id="saveAs" /> Pytaj, gdzie zapisać</label>
+      </section>
+
+      <form class="panel add" id="add-form">
+        <input type="url" id="add-url" placeholder="Wklej bezpośredni link do pliku wideo (.mp4, .webm…) albo playlisty .m3u8" required />
+        <button class="primary" type="submit">⚡ Pobierz</button>
+      </form>
+
+      <div class="toolbar">
+        <h2>Pobrania</h2>
+        <button id="clear-finished" class="ghost">Usuń zakończone</button>
+      </div>
+      <div id="jobs"></div>
+    </main>
+    <script type="module" src="manager.js"></script>
+  </body>
+</html>
