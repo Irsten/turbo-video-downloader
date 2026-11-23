@@ -130,6 +130,24 @@
         color: var(--text);
         font-weight: 600;
       }
+      .settings .note {
+        flex-basis: 100%;
+        margin: 2px 0 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .job.paused .status,
+      .job.interrupted .status,
+      .job.unsaved .status {
+        color: var(--warn);
+      }
+      .job.recording .status {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .job.recording .bar > div {
+        background: var(--accent);
+      }
       .job .buttons {
         display: flex;
         gap: 6px;
@@ -178,17 +196,24 @@
         <label title="Ile równoległych połączeń HTTP na jeden plik (MP4/WebM). Opera dla serwerów HTTP/1.1 otwiera max 6 połączeń na host.">
           Połączenia na plik <input type="number" id="connections" min="1" max="16" />
         </label>
-        <label title="Ile segmentów HLS pobierać jednocześnie">
-          Segmenty HLS naraz <input type="number" id="hlsConcurrency" min="1" max="32" />
+        <label title="Ile segmentów HLS/DASH pobierać jednocześnie">
+          Segmenty naraz <input type="number" id="hlsConcurrency" min="1" max="32" />
         </label>
-        <label title="Ile filmów pobierać jednocześnie">
+        <label title="Ile filmów pobierać jednocześnie (nagrywanie transmisji nie wlicza się do limitu)">
           Pobrania naraz <input type="number" id="maxParallel" min="1" max="6" />
         </label>
+        <label title="Obraz, dźwięk i segmenty HLS/DASH składane w jeden plik .mp4 – bez ponownego kodowania, bez utraty jakości">
+          <input type="checkbox" id="mp4" /> Łącz w jeden plik MP4
+        </label>
         <label><input type="checkbox" id="saveAs" /> Pytaj, gdzie zapisać</label>
+        <p class="note">
+          Pobierane dane trafiają od razu na dysk. Po zamknięciu tej karty albo restarcie przeglądarki
+          pobieranie wznowi się po ponownym otwarciu menedżera.
+        </p>
       </section>
 
       <form class="panel add" id="add-form">
-        <input type="url" id="add-url" placeholder="Wklej bezpośredni link do pliku wideo (.mp4, .webm…) albo playlisty .m3u8" required />
+        <input type="url" id="add-url" placeholder="Wklej link do pliku wideo (.mp4, .webm…), playlisty .m3u8 albo manifestu .mpd" required />
         <button class="primary" type="submit">⚡ Pobierz</button>
       </form>
 

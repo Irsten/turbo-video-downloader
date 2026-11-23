@@ -7,7 +7,9 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test tests/engine.test.mjs",
-    "test:e2e": "node tests/e2e.mjs"
+    "test": "node --test tests/engine.test.mjs tests/formats.test.mjs tests/remux.test.mjs",
+    "test:remux": "node tests/remux.e2e.mjs",
+    "test:e2e": "node tests/e2e.mjs",
+    "fixtures": "node tests/fixtures/generate.mjs"
   }
 }

@@ -35,7 +35,9 @@ export const state = {
   served: {}, // ścieżka -> bajty treści wysłane
   requests: {}, // ścieżka -> liczba żądań
   failSegments: new Map(), // nazwa segmentu -> status (np. 404, 403) albo 'html'
-  slow: false
+  slow: false, // wolne łącze: slowChunk bajtów co slowDelay ms na połączenie
+  slowChunk: 256 * 1024,
+  slowDelay: 15
 };
 export function resetCounters() {
   state.served = {};
@@ -70,16 +72,16 @@ function sendRange(req, res, buf, type, { ignoreRange = false, path } = {}) {
     count(body.length);
     return res.end(body);
   }
-  // Wolne łącze: 256 KiB co 15 ms.
+  // Wolne łącze: state.slowChunk bajtów co state.slowDelay ms.
   let pos = 0;
   const step = () => {
     if (res.destroyed) return;
-    const part = body.subarray(pos, pos + 256 * 1024);
+    const part = body.subarray(pos, pos + state.slowChunk);
     pos += part.length;
     count(part.length);
     if (pos >= body.length) return res.end(part);
     res.write(part);
-    setTimeout(step, 15);
+    setTimeout(step, state.slowDelay);
   };
   step();
 }
@@ -138,10 +140,23 @@ export function startServer() {
       return sendRange(req, res, segment(seg[1]), 'video/mp2t', { path: '/hls/*' });
     }
 
+    // ---------- transmisja na żywo: co LIVE_STEP ms pojawia się nowy segment, okno 3 segmentów ----------
+    if (p.startsWith('/live/')) return live(req, res, p);
+
     // ---------- strony do testów rozszerzenia ----------
     if (pages[p]) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(pages[p]);
+    }
+    // ---------- dowolne pliki (testy multimediów) ----------
+    const a = assets[p];
+    if (a) {
+      if (a.fail) {
+        res.writeHead(a.fail);
+        return res.end();
+      }
+      const body = typeof a.body === 'function' ? a.body() : a.body;
+      return sendRange(req, res, Buffer.from(body), a.type || 'application/octet-stream', { path: p });
     }
     res.writeHead(404);
     res.end();
@@ -150,3 +165,46 @@ export function startServer() {
 }
 
 export const pages = {};
+/** ścieżka -> { type, body (Buffer | string | () => …), fail (status) } */
+export const assets = {};
+
+// ---------------- transmisja na żywo ----------------
+export const liveState = {
+  start: 0,
+  step: 700, // ms na segment (krótko, żeby test trwał chwilę)
+  ended: false, // ENDLIST po zakończeniu
+  segments: (n) => segment(`live/seg${n}.ts`), // treść segmentu nr n
+  window: 3,
+  ext: 'ts',
+  map: null // np. 'init.mp4' dla fMP4
+};
+export function liveReset(opts = {}) {
+  Object.assign(liveState, { start: Date.now(), ended: false, window: 3, ext: 'ts', map: null }, opts);
+}
+const liveAvailable = () => Math.max(1, Math.floor((Date.now() - liveState.start) / liveState.step) + 1);
+
+function live(req, res, p) {
+  if (p === '/live/index.m3u8') {
+    const n = liveAvailable();
+    const first = Math.max(0, n - liveState.window);
+    let s = `#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:${first}\n`;
+    if (liveState.map) s += `#EXT-X-MAP:URI="${liveState.map}"\n`;
+    for (let i = first; i < n; i++) s += `#EXTINF:${(liveState.step / 1000).toFixed(3)},\nseg${i}.${liveState.ext}\n`;
+    if (liveState.ended) s += '#EXT-X-ENDLIST\n';
+    res.writeHead(200, { 'content-type': 'application/vnd.apple.mpegurl', 'cache-control': 'no-store' });
+    return res.end(s);
+  }
+  const m = /^\/live\/seg(\d+)\.\w+$/.exec(p);
+  if (m) {
+    const n = Number(m[1]);
+    if (n >= liveAvailable() || n < liveAvailable() - liveState.window - 2) {
+      res.writeHead(404);
+      return res.end();
+    }
+    return sendRange(req, res, Buffer.from(liveState.segments(n)), 'video/mp2t', { path: '/live/*' });
+  }
+  const a = assets[p];
+  if (a) return sendRange(req, res, Buffer.from(a.body), a.type || 'application/octet-stream', { path: p });
+  res.writeHead(404);
+  res.end();
+}

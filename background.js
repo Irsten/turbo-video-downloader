@@ -295,8 +295,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const tabId = sender.tab?.id;
         if (tabId == null || tabId < 0) return;
         const page = pageKey(sender.tab.url || '');
-        for (const { url, tag } of msg.items || []) {
+        const tracks = [];
+        for (const { url, tag, ...rest } of msg.items || []) {
           if (!isHttp(url) || isBlockedHost(url)) continue;
+          if (tag === 'track') {
+            tracks.push({ url, ...rest });
+            continue;
+          }
           const kind = classify(url) || (tag !== 'a' ? 'file' : null);
           if (!kind) continue;
           addItem(tabId, {
@@ -312,6 +317,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             source: 'page',
             time: Date.now()
           });
+        }
+        // Napisy z <track> – dopinamy do filmu, w którym są osadzone.
+        const m = tabs.get(tabId);
+        for (const t of tracks) {
+          const video = m?.get(dedupeKey(t.of || ''));
+          if (!video) continue;
+          video.subs ??= [];
+          if (!video.subs.some((s) => s.url === t.url)) {
+            video.subs.push({ url: t.url, lang: t.lang || '', label: t.label || '' });
+            scheduleSave(tabId);
+          }
         }
         return;
       }

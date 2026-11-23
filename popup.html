@@ -82,6 +82,23 @@
       footer .spacer {
         flex: 1;
       }
+      .item .opts {
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .item .opts:empty {
+        display: none;
+      }
+      .item .opts select {
+        flex: 1 1 45%;
+        min-width: 0;
+      }
+      .badge.live {
+        background: #4d2326;
+        color: #ffb3b9;
+      }
       .earlier > summary {
         cursor: pointer;
         user-select: none;
