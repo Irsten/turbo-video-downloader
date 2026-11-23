@@ -1,5 +1,7 @@
 // Service worker: wykrywa filmy w ruchu sieciowym kart i trzyma listę per karta.
-import { classify, dedupeKey, urlExt, extFromMime, isBlockedHost, isHttp, VIDEO_EXT } from './lib/media.js';
+import { classify, dedupeKey, urlExt, extFromMime, isBlockedHost, isHttp, pageKey, VIDEO_EXT } from './lib/media.js';
+import { parseM3U8 } from './lib/hls.js';
+import { makePrepare, FETCH_INIT } from './lib/net.js';
 
 const SELF_ORIGIN = chrome.runtime.getURL('').replace(/\/$/, '');
 const MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object'];
@@ -71,9 +73,66 @@ function scheduleSave(tabId) {
       const key = 'tab:' + tabId;
       if (m && m.size) chrome.storage.session.set({ [key]: Object.fromEntries(m) }).catch(() => {});
       else chrome.storage.session.remove(key).catch(() => {});
-      chrome.action.setBadgeText({ tabId, text: m && m.size ? String(m.size) : '' }).catch(() => {});
+      updateBadge(tabId);
     }, 150)
   );
+}
+
+/** Klucze pozycji, których popup nie pokazuje: jakości i audio z playlisty master, puste playlisty. */
+function hiddenKeys(m) {
+  const hidden = new Set();
+  for (const it of m.values()) {
+    for (const k of it.hls?.children || []) hidden.add(k);
+    if (it.hls?.empty) hidden.add(it.key);
+  }
+  return hidden;
+}
+
+/** Licznik na ikonie = tyle filmów, ile popup pokaże dla bieżącej podstrony. */
+async function updateBadge(tabId) {
+  let n = 0;
+  if (tabs.get(tabId)?.size) {
+    const page = pageKey((await tabInfo(tabId)).url);
+    const m = tabs.get(tabId);
+    const hidden = m ? hiddenKeys(m) : new Set();
+    for (const it of m?.values() || []) if (!hidden.has(it.key) && (!it.page || it.page === page)) n++;
+  }
+  chrome.action.setBadgeText({ tabId, text: n ? String(n) : '' }).catch(() => {});
+}
+
+// ---------- analiza HLS ----------
+// Odtwarzacz pobiera playlistę master, a potem playlisty jakości i audio – każda trafia na listę.
+// Jedno pobranie playlisty mówi, które z nich to tylko części mastera (popup ich nie pokazuje).
+const analyzing = new Set();
+
+async function analyzeHls(tabId, item) {
+  const id = tabId + ' ' + item.key;
+  if (item.hls || analyzing.has(id)) return;
+  analyzing.add(id);
+  let hls = { kind: 'unknown' };
+  try {
+    await makePrepare(item.headers, { outsideTabs: true })(item.url);
+    const res = await fetch(item.url, { ...FETCH_INIT, signal: AbortSignal.timeout(15000) });
+    if (res.ok) {
+      const pl = parseM3U8(await res.text(), res.url || item.url);
+      hls =
+        pl.kind === 'master'
+          ? {
+              kind: 'master',
+              children: [...pl.variants.map((v) => v.url), ...pl.audios.map((a) => a.url).filter(Boolean)].map(dedupeKey)
+            }
+          : { kind: 'media', empty: !pl.segments.length };
+    }
+  } catch {
+    // nie udało się – pozycja zostaje widoczna, popup spróbuje sam
+  } finally {
+    analyzing.delete(id);
+  }
+  const cur = tabs.get(tabId)?.get(item.key);
+  if (cur) {
+    cur.hls = hls;
+    scheduleSave(tabId);
+  }
 }
 
 function clearTab(tabId) {
@@ -91,19 +150,26 @@ function addItem(tabId, item) {
     if (item.size && (!prev.size || item.size > prev.size)) (prev.size = item.size), (changed = true);
     if (item.mime && !prev.mime) (prev.mime = item.mime), (changed = true);
     if (item.headers.referer && !prev.headers.referer) (prev.headers = item.headers), (changed = true);
+    // Film znów w użyciu (powrót na podstronę w aplikacji SPA, odtwarzacz w rogu) – przypisz go
+    // do bieżącej podstrony.
+    if (item.page && item.page !== prev.page) (prev.page = item.page), (changed = true);
+    if (item.title && item.page === prev.page && item.title !== prev.title) (prev.title = item.title), (changed = true);
     if (changed) scheduleSave(tabId);
+    if (prev.kind === 'hls' && !prev.hls) analyzeHls(tabId, prev);
     return;
   }
   if (m.size >= MAX_ITEMS_PER_TAB) return;
   m.set(item.key, item);
   scheduleSave(tabId);
+  if (item.kind === 'hls') analyzeHls(tabId, item);
 }
 
-async function tabUrl(tabId) {
+async function tabInfo(tabId) {
   try {
-    return (await chrome.tabs.get(tabId)).url || '';
+    const t = await chrome.tabs.get(tabId);
+    return { url: t.url || '', title: t.title || '' };
   } catch {
-    return '';
+    return { url: '', title: '' };
   }
 }
 
@@ -173,7 +239,7 @@ async function handleResponse(d) {
   if (kind === 'file' && size != null && size < MIN_FILE_SIZE) return;
 
   await ready;
-  const referer = sent?.referer || (await tabUrl(d.tabId));
+  const tab = await tabInfo(d.tabId);
   addItem(d.tabId, {
     key: dedupeKey(d.url),
     url: d.url,
@@ -181,7 +247,9 @@ async function handleResponse(d) {
     mime: ct,
     size,
     ext: VIDEO_EXT.includes(urlExt(d.url)) ? urlExt(d.url) : extFromMime(ct),
-    headers: { referer, origin: sent?.origin || '' },
+    headers: { referer: sent?.referer || tab.url, origin: sent?.origin || '' },
+    page: pageKey(tab.url),
+    title: tab.title,
     source: 'network',
     time: Date.now()
   });
@@ -189,6 +257,12 @@ async function handleResponse(d) {
 
 // ---------- karty ----------
 chrome.tabs.onRemoved.addListener((tabId) => ready.then(() => clearTab(tabId)));
+
+// Zmiana adresu bez przeładowania (aplikacje SPA): lista zostaje, ale licznik ma liczyć filmy
+// bieżącej podstrony – popup pokazuje wcześniejsze w osobnej, zwiniętej sekcji.
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.url) ready.then(() => tabs.has(tabId) && updateBadge(tabId));
+});
 
 // ---------- wiadomości ----------
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -220,6 +294,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true });
         const tabId = sender.tab?.id;
         if (tabId == null || tabId < 0) return;
+        const page = pageKey(sender.tab.url || '');
         for (const { url, tag } of msg.items || []) {
           if (!isHttp(url) || isBlockedHost(url)) continue;
           const kind = classify(url) || (tag !== 'a' ? 'file' : null);
@@ -232,6 +307,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             size: null,
             ext: VIDEO_EXT.includes(urlExt(url)) ? urlExt(url) : '',
             headers: { referer: sender.url || '', origin: '' },
+            page,
+            title: sender.tab.title || '',
             source: 'page',
             time: Date.now()
           });
@@ -240,7 +317,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       case 'get-media': {
         const m = tabs.get(msg.tabId);
-        sendResponse({ items: m ? [...m.values()] : [] });
+        const hidden = m ? hiddenKeys(m) : new Set();
+        sendResponse({ items: m ? [...m.values()].map((it) => ({ ...it, hidden: hidden.has(it.key) })) : [] });
         return;
       }
       case 'clear-media': {

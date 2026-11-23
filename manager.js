@@ -1,4 +1,4 @@
-import { downloadFile, downloadHls } from './lib/engine.js';
+import { downloadFile, downloadHls, resumableBytes } from './lib/engine.js';
 import { makePrepare, FETCH_INIT } from './lib/net.js';
 import { loadSettings, saveSettings, newJobId, takeJobs } from './lib/jobs.js';
 import { variantLabel } from './lib/hls.js';
@@ -44,7 +44,8 @@ const ACTIVE = new Set(['running', 'saving']);
 
 function addJob(job) {
   if (jobs.has(job.id)) return;
-  const st = { job, status: 'queued', loaded: 0, total: null, samples: [], speed: 0 };
+  // resume: pobrane fragmenty/segmenty – „Wznów” po błędzie lub anulowaniu nie zaczyna od zera.
+  const st = { job, status: 'queued', loaded: 0, total: null, samples: [], speed: 0, resume: {}, kept: 0 };
   jobs.set(job.id, st);
   createCard(st);
   update(st);
@@ -84,6 +85,8 @@ async function run(st) {
     total: null,
     samples: [],
     speed: 0,
+    kept: 0,
+    resume: st.resume || {},
     startedAt: performance.now(),
     ctrl: new AbortController(),
     downloadIds: []
@@ -93,6 +96,7 @@ async function run(st) {
   const signal = st.ctrl.signal;
   const prepare = makePrepare(job.headers || {});
   const onProgress = (p) => {
+    if (p.resumed) st.samples = []; // odzyskane bajty to nie prędkość
     st.loaded = p.loaded;
     st.total = p.total;
     if (p.segmentsTotal) st.segs = [p.segmentsDone, p.segmentsTotal];
@@ -105,7 +109,8 @@ async function run(st) {
         signal,
         onProgress,
         prepare,
-        fetchInit: FETCH_INIT
+        fetchInit: FETCH_INIT,
+        resume: st.resume
       });
       st.info = r.ranged ? `${r.connectionsUsed} połączeń równolegle` : 'serwer nie obsługuje zakresów – 1 połączenie';
       const ext = job.ext || extFromMime(r.contentType) || 'mp4';
@@ -118,6 +123,7 @@ async function run(st) {
         onProgress,
         prepare,
         fetchInit: FETCH_INIT,
+        resume: st.resume,
         onInfo: (i) => {
           const parts = [];
           if (i.variant) parts.push(variantLabel(i.variant));
@@ -142,6 +148,7 @@ async function run(st) {
         };
       }
     }
+    st.resume = null; // gotowe – fragmenty są już w pliku
     st.elapsed = (performance.now() - st.startedAt) / 1000;
     st.total = st.files.reduce((n, f) => n + f.blob.size, 0);
     st.loaded = st.total;
@@ -153,6 +160,7 @@ async function run(st) {
       st.error = e?.message || String(e);
       console.error(e);
     }
+    st.kept = resumableBytes(st.resume);
   } finally {
     update(st);
     pump();
@@ -276,6 +284,8 @@ function update(st) {
     stats.push(['Rozmiar', formatBytes(st.total)]);
     stats.push(['Czas', formatDuration(st.elapsed)]);
     stats.push(['Średnio', `${formatBytes(st.total / Math.max(st.elapsed, 0.001))}/s`]);
+  } else if ((st.status === 'error' || st.status === 'canceled') && st.kept) {
+    stats.push(['Zachowano', `${formatBytes(st.kept)} – „Wznów” dokończy pobieranie od tego miejsca`]);
   }
   if (st.info) stats.push(st.info);
   $('.stats', c).replaceChildren(
@@ -315,7 +325,7 @@ function update(st) {
     );
   if (st.status === 'error' || st.status === 'canceled')
     btns.append(
-      button('Ponów', 'primary', () => {
+      button(st.kept ? 'Wznów' : 'Ponów', 'primary', () => {
         st.status = 'queued';
         st.error = null;
         update(st);
@@ -330,6 +340,7 @@ function update(st) {
 function removeJob(st) {
   st.ctrl?.abort();
   st.files = null;
+  st.resume = null; // zwolnij zachowane fragmenty
   st.el?.remove();
   jobs.delete(st.job.id);
   renderEmpty();

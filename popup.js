@@ -1,4 +1,4 @@
-import { formatBytes, formatDuration, sanitizeFilename, nameFromUrl, extFromMime } from './lib/media.js';
+import { formatBytes, formatDuration, sanitizeFilename, nameFromUrl, extFromMime, pageKey } from './lib/media.js';
 import { parseM3U8, variantLabel } from './lib/hls.js';
 import { makePrepare, FETCH_INIT } from './lib/net.js';
 import { enqueue, openManager, newJobId } from './lib/jobs.js';
@@ -7,8 +7,13 @@ const $ = (s) => document.querySelector(s);
 const listEl = $('#list');
 
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-const pageTitle = sanitizeFilename(tab?.title || '', '');
+const curPage = pageKey(tab?.url || '');
 $('#page').textContent = tab?.title || tab?.url || '';
+
+/** Film z innej podstrony tej karty (przejście w aplikacji SPA bez przeładowania). */
+const isEarlier = (item) => !!item.page && item.page !== curPage;
+/** Czy sekcja „Wcześniej na tej karcie” jest rozwinięta (null = domyślnie). */
+let earlierOpen = null;
 
 /** url playlisty -> Promise<parsed | {error}> */
 const hlsCache = new Map();
@@ -54,7 +59,9 @@ function el(tag, props = {}, ...children) {
 }
 
 function baseName(item) {
-  return pageTitle || sanitizeFilename(nameFromUrl(item.url), 'film');
+  // Wcześniejszy film nazywamy tytułem strony, na której go wykryto, a nie bieżącej.
+  const title = isEarlier(item) ? item.title : tab?.title;
+  return sanitizeFilename(title || '', '') || sanitizeFilename(nameFromUrl(item.url), 'film');
 }
 
 function hostOf(url) {
@@ -230,6 +237,7 @@ async function render() {
       }
     }
     const visible = items
+      .filter((i) => !i.hidden) // części playlisty master rozpoznane już w tle
       .filter((i) => !(i.kind === 'hls' && children.has(i.url)))
       .filter((i) => !(i.kind === 'hls' && infos.get(i.url)?.kind === 'media' && !infos.get(i.url).segments.length))
       .sort((a, b) => {
@@ -237,24 +245,34 @@ async function render() {
         return rank(a) - rank(b) || (b.size || 0) - (a.size || 0);
       });
 
+    const current = visible.filter((i) => !isEarlier(i));
+    const earlier = visible.filter(isEarlier);
+    const renderItem = (i) =>
+      i.kind === 'file' ? renderFile(i) : i.kind === 'hls' ? renderHls(i, infos.get(i.url)) : renderDash(i);
+
     listEl.replaceChildren();
-    if (!visible.length) {
+    if (!current.length) {
       listEl.append(
         el(
           'div',
           { class: 'empty' },
-          el('b', {}, 'Nie wykryto jeszcze filmów na tej karcie.'),
+          el('b', {}, earlier.length ? 'Na tej podstronie nie wykryto jeszcze filmów.' : 'Nie wykryto jeszcze filmów na tej karcie.'),
           el('br'),
           'Uruchom odtwarzanie filmu – rozszerzenie wychwyci go z ruchu sieciowego. ',
-          'Jeśli strona była otwarta przed instalacją rozszerzenia, odśwież ją.'
+          earlier.length ? null : 'Jeśli strona była otwarta przed instalacją rozszerzenia, odśwież ją.'
         )
       );
-      return;
     }
-    for (const i of visible) {
-      if (i.kind === 'file') listEl.append(renderFile(i));
-      else if (i.kind === 'hls') listEl.append(renderHls(i, infos.get(i.url)));
-      else listEl.append(renderDash(i));
+    listEl.append(...current.map(renderItem));
+    if (earlier.length) {
+      const box = el(
+        'details',
+        { class: 'earlier', ontoggle: (e) => (earlierOpen = e.target.open) },
+        el('summary', {}, `Wcześniej na tej karcie (${earlier.length})`),
+        earlier.map(renderItem)
+      );
+      box.open = earlierOpen ?? !current.length;
+      listEl.append(box);
     }
   };
 

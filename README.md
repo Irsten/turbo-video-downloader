@@ -22,6 +22,10 @@ Działa też w Chrome, Edge, Brave i Vivaldi (ta sama procedura, np. `chrome://e
 
 W menedżerze możesz też wkleić bezpośredni link do `.mp4`/`.webm`/`.m3u8`.
 
+Pobieranie przerwane błędem albo anulowane dokończysz przyciskiem **Wznów** – pobrane fragmenty zostają w pamięci, dopóki karta menedżera jest otwarta (przycisk ✕ je zwalnia).
+
+Na stronach, które zmieniają adres bez przeładowania (X, Instagram…), licznik na ikonie liczy filmy bieżącej podstrony, a te z poprzednich są w popupie w zwiniętej sekcji **Wcześniej na tej karcie**.
+
 ## Skąd prędkość
 
 | Mechanizm | Co daje |
@@ -63,6 +67,19 @@ ffmpeg -i "film.ts" -c copy "film.mp4"
 - Plik jest składany w pamięci przeglądarki (Opera przenosi duże dane na dysk), więc filmy rzędu kilku GB działają, ale potrzebują wolnego miejsca na dysku systemowym.
 - Jeżeli strona wymaga ciasteczek i nagłówka `Referer`, rozszerzenie wysyła je tak samo jak strona. Linki z tokenem, który wygasa, trzeba pobrać od razu po wykryciu.
 
+## Testy
+
+Wymagają tylko Node 18+ (bez instalowania pakietów). Lokalny serwer testowy symuluje wygasłe linki, błędy 403/404, zrywanie połączeń, serwery bez Range i HLS z osobnym audio.
+
+```bash
+npm test           # silnik pobierania (lib/engine.js) – kilka sekund
+npm run test:e2e   # całe rozszerzenie w Chrome 126+ działającym w tle, na tymczasowym profilu
+```
+
+Test w Chrome sam szuka przeglądarki (inną wskażesz zmienną `CHROME`). `HEADFUL=1` pokazuje okno, a `KEEP=1` zostawia profil i pobrane pliki do obejrzenia.
+
+Pakując rozszerzenie do sklepu, pomiń `tests/` i `package.json` – nie są potrzebne do działania.
+
 ## Struktura
 
 ```
@@ -76,4 +93,6 @@ lib/hls.js         – parser .m3u8
 lib/net.js         – nagłówki Referer/Origin (declarativeNetRequest)
 lib/media.js       – rozpoznawanie formatów, nazwy plików
 lib/jobs.js        – kolejka i ustawienia
+tests/             – testy silnika (Node) i całego rozszerzenia (Chrome)
+package.json       – skrypty testów (rozszerzenie nie korzysta z Node)
 ```
