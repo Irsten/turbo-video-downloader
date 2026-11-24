@@ -17,7 +17,7 @@ export default [
   js.configs.recommended,
   {
     // Extension pages, the service worker and the shared library (the library also runs in Node tests).
-    files: ['*.js', 'lib/**/*.js'],
+    files: ['*.js', 'lib/**/*.js', 'scripts/store/*.js'],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',
@@ -35,7 +35,7 @@ export default [
     languageOptions: { globals: { ...globals.worker } }
   },
   {
-    files: ['tests/**/*.mjs', 'scripts/**/*.mjs', 'eslint.config.js'],
+    files: ['tests/**/*.mjs', 'scripts/**/*.mjs', 'native/**/*.mjs', 'eslint.config.js'],
     languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: { ...globals.node } },
     rules
   }

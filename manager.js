@@ -7,6 +7,7 @@ import { loadSettings, saveSettings, newJobId, takeJobs, JOB_PREFIX, loadHistory
 import { variantLabel } from './lib/hls.js';
 import { representationLabel } from './lib/dash.js';
 import { tr, localize } from './lib/i18n.js';
+import { EXTERNAL_ENABLED, downloadExternal, revealFile, cleanupExternal, mountExternalSetup } from './lib/external.js';
 import {
   formatBytes,
   formatDuration,
@@ -65,6 +66,7 @@ tplInput.addEventListener('change', () => {
   tplPreview();
 });
 tplPreview();
+if (EXTERNAL_ENABLED) mountExternalSetup($('#extras'));
 
 // ---------------- working files (OPFS) ----------------
 let diskOk = true;
@@ -88,6 +90,8 @@ async function openStoreFile(st, role) {
 }
 
 async function removeStoreFiles(st) {
+  // An external download keeps its partial files in the helper's folder.
+  if (st.job.kind === 'external' && st.status !== 'done') cleanupExternal(st.job.id);
   const prefix = st.job.id + '-';
   st.handles = null;
   try {
@@ -132,6 +136,8 @@ function forget(st) {
 const jobs = new Map();
 const ACTIVE = new Set(['running', 'processing', 'saving']);
 const BUSY = new Set([...ACTIVE, 'recording']);
+/** Bytes already downloaded that resuming keeps (an external download only reports a count). */
+const keptBytes = (st) => (st.job.kind === 'external' ? st.resume?.bytes || 0 : resumableBytes(st.resume));
 
 function addJob(job, restored = null) {
   if (jobs.has(job.id)) return;
@@ -147,7 +153,7 @@ function addJob(job, restored = null) {
     kept: 0,
     ...restored
   };
-  st.kept = resumableBytes(st.resume);
+  st.kept = keptBytes(st);
   st.loaded = st.kept;
   jobs.set(job.id, st);
   createCard(st);
@@ -213,7 +219,7 @@ async function run(st, { finalizeOnly = false } = {}) {
     note: null,
     info: '',
     segs: null,
-    loaded: resumableBytes(st.resume),
+    loaded: keptBytes(st),
     total: null,
     samples: [],
     speed: 0,
@@ -267,6 +273,24 @@ async function run(st, { finalizeOnly = false } = {}) {
         st.info = r.ranged ? tr('infoConnections', r.connectionsUsed) : tr('infoNoRanges');
         const subtitles = await fetchTrackSubtitles(job.subs || [], prepare, signal);
         st.result = { kind: 'file', ext: job.ext || extFromMime(r.contentType) || 'mp4', subtitles };
+      } else if (job.kind === 'external') {
+        // yt-dlp through the helper program: it saves the finished files itself.
+        const r = await downloadExternal(job, {
+          signal,
+          onProgress: (p) => {
+            st.loaded = p.loaded;
+            st.total = p.total;
+            st.resume = { bytes: p.loaded };
+            persist(st);
+          },
+          onPhase: (p) => {
+            if (p.phase !== 'merge' && p.phase !== 'remux') return;
+            st.status = 'processing';
+            st.progress = p.fraction || 0;
+            update(st);
+          }
+        });
+        st.result = { kind: 'external', files: r.files, separate: r.separate };
       } else if (job.kind === 'dash') {
         const r = await downloadDash(job.url, {
           videoId: job.videoId,
@@ -314,7 +338,7 @@ async function run(st, { finalizeOnly = false } = {}) {
       st.error = e?.message || String(e);
       console.error(e);
     }
-    st.kept = resumableBytes(st.resume);
+    st.kept = keptBytes(st);
   } finally {
     if (st.removed) await removeStoreFiles(st);
     else {
@@ -330,8 +354,10 @@ async function run(st, { finalizeOnly = false } = {}) {
 function notify(st) {
   if (!settings.notify || !document.hidden || !['done', 'error', 'unsaved'].includes(st.status)) return;
   const done = st.status === 'done';
+  const path = st.saved?.[0]?.path; // saved by the helper program
+  const id = !done ? `tvd-err:${st.job.id}` : path ? `tvd-file:${encodeURIComponent(path)}` : `tvd-done:${st.downloadIds[0]}`;
   chrome.notifications
-    .create(done ? `tvd-done:${st.downloadIds[0]}` : `tvd-err:${st.job.id}`, {
+    .create(id, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: tr(done ? 'notifyDone' : 'notifyFailed'),
@@ -412,13 +438,17 @@ async function renderHistory() {
     const when = document.createElement('div');
     when.className = 'when';
     when.textContent = `${formatBytes(e.size)} · ${hostOf(e.page || e.url)} · ${timeFmt.format(e.finishedAt)}`;
-    const show = button(tr('show'), '', () => chrome.downloads.show(e.downloadIds[0]), tr('showTitle'));
-    show.disabled = true;
-    chrome.downloads.search({ id: e.downloadIds[0] }).then(([d]) => {
-      const ok = d && d.state === 'complete' && d.exists !== false;
-      show.disabled = !ok;
-      if (!ok) show.title = tr('fileGone');
-    });
+    // Files saved by the helper program (YouTube) aren't in the browser's downloads list.
+    const external = !!e.paths?.length;
+    const show = button(tr('show'), '', () => (external ? revealFile(e.paths[0]) : chrome.downloads.show(e.downloadIds[0])), tr('showTitle'));
+    if (!external) {
+      show.disabled = true;
+      chrome.downloads.search({ id: e.downloadIds[0] }).then(([d]) => {
+        const ok = d && d.state === 'complete' && d.exists !== false;
+        show.disabled = !ok;
+        if (!ok) show.title = tr('fileGone');
+      });
+    }
     const again = button(tr('downloadAgain'), '', () => addJob({ ...e.job, id: newJobId(), createdAt: Date.now() }), tr('downloadAgainTitle'));
     const del = button('✕', 'ghost', async () => {
       await saveHistory((await loadHistory()).filter((x) => x.id !== e.id));
@@ -467,6 +497,7 @@ const subtitleName = (s, i) => sanitizeFilename(s.language || s.name || '', '') 
 /** Builds the output files (MP4 or raw tracks + subtitles) and saves them to the downloads folder. */
 async function finalize(st) {
   const res = st.result;
+  if (res.kind === 'external') return finishExternal(st);
   const base = st.job.filename;
   const outputs = [];
   let start = null;
@@ -515,6 +546,31 @@ async function finalize(st) {
   });
   st.outputs = outputs;
   await saveAll(st);
+}
+
+/** The helper program has already saved the files – only the history and the job's state are left. */
+async function finishExternal(st) {
+  const { files, separate } = st.result;
+  st.saved = files.map(({ name, size, path }) => ({ name, size, path }));
+  if (separate) st.hint = rawHint(files.filter((f) => !f.name.endsWith('.srt')).map((f) => f.name), st.job.filename);
+  st.status = 'done';
+  st.total = st.loaded = st.total || st.loaded;
+  await forget(st);
+  st.resume = null;
+  st.result = null;
+  await addHistory({
+    id: st.job.id,
+    name: files[0]?.name || st.job.filename,
+    files: files.map((f) => f.name),
+    size: files.reduce((n, f) => n + f.size, 0),
+    finishedAt: Date.now(),
+    url: st.job.url,
+    page: '',
+    downloadIds: [],
+    paths: files.map((f) => f.path),
+    job: st.job
+  });
+  renderHistory();
 }
 
 function rawHint(names, base) {
@@ -739,6 +795,7 @@ function update(st) {
     );
   if (st.status === 'done' && st.downloadIds?.length)
     btns.append(button(tr('showInFolder'), '', () => chrome.downloads.show(st.downloadIds[0])));
+  else if (st.status === 'done' && st.saved?.[0]?.path) btns.append(button(tr('showInFolder'), '', () => revealFile(st.saved[0].path)));
   if (!['processing', 'saving'].includes(st.status)) btns.append(button('✕', 'ghost', () => removeJob(st), tr('removeJobTitle')));
 }
 

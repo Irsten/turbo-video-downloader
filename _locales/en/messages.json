@@ -493,5 +493,89 @@
   },
   "emptyJobs": {
     "message": "No downloads. Click the extension icon on a page with a video and choose \"⚡ Download\"."
+  },
+  "ytErrNoHost": {
+    "message": "The YouTube helper program isn't installed."
+  },
+  "ytErrForbidden": {
+    "message": "The YouTube helper program doesn't accept this extension – run native/install.mjs again with this extension's ID."
+  },
+  "ytErrNoYtdlp": {
+    "message": "yt-dlp wasn't found – install it (then restart the browser), or put its path in native/config.json."
+  },
+  "ytErrYtdlp": {
+    "message": "yt-dlp: $1"
+  },
+  "ytErrHostExited": {
+    "message": "The YouTube helper program stopped unexpectedly ($1). Details are in turbo-video-downloader-host.log in the system temp folder."
+  },
+  "ytAsking": {
+    "message": "Asking yt-dlp…"
+  },
+  "ytSetupLink": {
+    "message": "How to set it up"
+  },
+  "ytTryAgain": {
+    "message": "Try again"
+  },
+  "ytLiveUnsupported": {
+    "message": "Live streams from YouTube can't be downloaded."
+  },
+  "ytNoFormats": {
+    "message": "yt-dlp didn't find any format that can be downloaded."
+  },
+  "ytAudioOnly": {
+    "message": "Audio only ($1)"
+  },
+  "ytAudio": {
+    "message": "audio"
+  },
+  "ytNeedsFfmpeg": {
+    "message": "needs ffmpeg"
+  },
+  "ytFfmpegHint": {
+    "message": "Qualities available only as WebM (usually above 1080p) need ffmpeg – see the YouTube panel in the manager."
+  },
+  "ytSetupTitle": {
+    "message": "YouTube (yt-dlp)"
+  },
+  "ytSetupChecking": {
+    "message": "checking…"
+  },
+  "ytSetupReady": {
+    "message": "ready"
+  },
+  "ytSetupNotReady": {
+    "message": "not set up"
+  },
+  "ytSetupIntro": {
+    "message": "YouTube videos are downloaded by yt-dlp, a free program on this computer, through a small helper (native/host.mjs). The files go straight to the folder below, not through the browser's download list."
+  },
+  "ytStatusYtdlp": {
+    "message": "yt-dlp $1 ✓"
+  },
+  "ytStatusFfmpeg": {
+    "message": "ffmpeg ✓ – all qualities are available."
+  },
+  "ytStatusNoFfmpeg": {
+    "message": "No ffmpeg: video and audio are merged by the extension, which handles MP4/M4A only, so qualities available only as WebM (usually above 1080p) are off. Install ffmpeg to get them."
+  },
+  "ytStatusFolder": {
+    "message": "Files are saved in: $1"
+  },
+  "ytStepTools": {
+    "message": "1. Install yt-dlp (required) and ffmpeg (optional), e.g.:"
+  },
+  "ytStepInstall": {
+    "message": "2. Install Node.js 20.16 or newer, then run in a terminal, in the extension's folder:"
+  },
+  "ytStepCheck": {
+    "message": "3. Click \"Check again\"."
+  },
+  "ytConfigHint": {
+    "message": "If yt-dlp is installed somewhere else, put its path in native/config.json (\"ytdlp\")."
+  },
+  "ytCheckAgain": {
+    "message": "Check again"
   }
 }

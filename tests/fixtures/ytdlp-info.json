@@ -1,0 +1,32 @@
+{
+  "id": "aqz-KE-bpKQ",
+  "title": "Big Buck Bunny: test / video",
+  "channel": "Test channel",
+  "duration": 8,
+  "thumbnail": "https://i.ytimg.com/vi/aqz-KE-bpKQ/maxresdefault.jpg",
+  "is_live": false,
+  "live_status": "not_live",
+  "formats": [
+    { "format_id": "sb0", "ext": "mhtml", "protocol": "mhtml", "vcodec": "none", "acodec": "none", "height": 90 },
+    { "format_id": "139", "ext": "m4a", "protocol": "https", "vcodec": "none", "acodec": "mp4a.40.5", "abr": 48.8, "filesize": 50000 },
+    { "format_id": "140-drc", "ext": "m4a", "protocol": "https", "vcodec": "none", "acodec": "mp4a.40.2", "abr": 129.5, "format_note": "medium, DRC", "filesize": 99529 },
+    { "format_id": "140", "ext": "m4a", "protocol": "https", "vcodec": "none", "acodec": "mp4a.40.2", "abr": 129.5, "filesize": 99529 },
+    { "format_id": "251", "ext": "webm", "protocol": "https", "vcodec": "none", "acodec": "opus", "abr": 135, "filesize": 98000 },
+    { "format_id": "18", "ext": "mp4", "protocol": "https", "vcodec": "avc1.42001E", "acodec": "mp4a.40.2", "height": 360, "fps": 30, "filesize_approx": 400000 },
+    { "format_id": "134", "ext": "mp4", "protocol": "https", "vcodec": "avc1.4d401e", "acodec": "none", "height": 360, "fps": 30, "tbr": 300 },
+    { "format_id": "247", "ext": "webm", "protocol": "https", "vcodec": "vp9", "acodec": "none", "height": 720, "fps": 30, "filesize": 100000 },
+    { "format_id": "136", "ext": "mp4", "protocol": "https", "vcodec": "avc1.4d401f", "acodec": "none", "height": 720, "fps": 30, "filesize": 109081 },
+    { "format_id": "137", "ext": "mp4", "protocol": "https", "vcodec": "avc1.640028", "acodec": "none", "height": 1080, "fps": 30, "filesize": 109081 },
+    { "format_id": "299", "ext": "mp4", "protocol": "https", "vcodec": "avc1.64002a", "acodec": "none", "height": 1080, "fps": 60, "filesize": 109081 },
+    { "format_id": "308", "ext": "webm", "protocol": "https", "vcodec": "vp09.00.50.08", "acodec": "none", "height": 1440, "fps": 60, "filesize": 300000 },
+    { "format_id": "96", "ext": "mp4", "protocol": "m3u8_native", "vcodec": "avc1.640028", "acodec": "mp4a.40.2", "height": 1080, "fps": 30 },
+    { "format_id": "drm", "ext": "mp4", "protocol": "https", "vcodec": "avc1.640033", "acodec": "none", "height": 2160, "fps": 30, "has_drm": true }
+  ],
+  "subtitles": {
+    "en": [{ "ext": "json3", "name": "English" }, { "ext": "vtt", "name": "English" }],
+    "pl": [{ "ext": "vtt", "name": "Polish" }],
+    "fr": [{ "ext": "srv3", "name": "French" }],
+    "live_chat": [{ "ext": "json" }]
+  },
+  "automatic_captions": { "de": [{ "ext": "vtt", "name": "German (auto)" }] }
+}

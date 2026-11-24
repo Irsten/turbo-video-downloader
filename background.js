@@ -16,6 +16,7 @@ import { parseM3U8 } from './lib/hls.js';
 import { makePrepare, FETCH_INIT } from './lib/net.js';
 import { loadSettings, newJobId } from './lib/jobs.js';
 import { tr } from './lib/i18n.js';
+import { pageVideoCount, revealFile } from './lib/external.js';
 
 const SELF_ORIGIN = chrome.runtime.getURL('').replace(/\/$/, '');
 const MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object'];
@@ -139,7 +140,9 @@ globalThis.tvdDownloadFromContext = downloadFromContext; // for tests (the conte
 chrome.notifications.onClicked.addListener((id) => {
   chrome.notifications.clear(id);
   const done = /^tvd-done:(\d+)$/.exec(id);
+  const file = /^tvd-file:(.+)$/.exec(id); // saved by the helper program
   if (done) chrome.downloads.show(Number(done[1]));
+  else if (file) revealFile(decodeURIComponent(file[1]));
   else ensureManager(true);
 });
 
@@ -179,12 +182,13 @@ function hiddenKeys(m) {
 
 /** Badge on the icon = as many videos as the popup will show for the current sub-page. */
 async function updateBadge(tabId) {
-  let n = 0;
-  if (tabs.get(tabId)?.size) {
-    const page = pageKey((await tabInfo(tabId)).url);
-    const m = tabs.get(tabId);
-    const hidden = m ? hiddenKeys(m) : new Set();
-    for (const it of m?.values() || []) if (!hidden.has(it.key) && (!it.page || it.page === page)) n++;
+  const { url } = await tabInfo(tabId);
+  let n = pageVideoCount(url); // a YouTube video page (personal build)
+  const m = tabs.get(tabId);
+  if (m?.size) {
+    const page = pageKey(url);
+    const hidden = hiddenKeys(m);
+    for (const it of m.values()) if (!hidden.has(it.key) && (!it.page || it.page === page)) n++;
   }
   chrome.action.setBadgeText({ tabId, text: n ? String(n) : '' }).catch(() => {});
 }
@@ -369,7 +373,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Address change without a reload (SPA): the list stays, but the badge should count the videos
 // of the current sub-page – the popup shows the earlier ones in a separate, collapsed section.
 chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (info.url) ready.then(() => tabs.has(tabId) && updateBadge(tabId));
+  if (info.url) ready.then(() => updateBadge(tabId));
 });
 
 // ---------- messages ----------

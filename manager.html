@@ -221,6 +221,34 @@
         font-size: 14px;
         margin: 0;
       }
+      /* panel of an external helper program (personal build) */
+      .helper summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .helper p {
+        margin: 8px 0 4px;
+        font-size: 13px;
+      }
+      .helper p.ok {
+        color: var(--ok);
+      }
+      .helper p.warn {
+        color: var(--warn);
+      }
+      .helper code {
+        display: block;
+        padding: 6px 8px;
+        background: #111215;
+        border-radius: 6px;
+        color: #d6d9e0;
+        user-select: all;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .helper button {
+        margin-top: 10px;
+      }
     </style>
   </head>
   <body>
@@ -261,6 +289,7 @@
         <input type="url" id="add-url" data-i18n-placeholder="addPlaceholder" placeholder="Paste a link to a video file (.mp4, .webm…), an .m3u8 playlist or an .mpd manifest" required />
         <button class="primary" type="submit" data-i18n="download">⚡ Download</button>
       </form>
+      <div id="extras"></div>
 
       <div class="toolbar">
         <h2 data-i18n="downloadsHeading">Downloads</h2>

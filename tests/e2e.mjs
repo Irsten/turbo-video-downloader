@@ -2,12 +2,15 @@
 // (CDP over a pipe + Extensions.loadUnpacked, Chrome 126+) and checks on local pages:
 // detection and badge, SPA, popup, content.js, manager (errors, resuming also after closing it),
 // merging into MP4 (played in Chrome), .srt subtitles, DASH, audio choice, live recording,
+// YouTube through the helper program with a fake yt-dlp (personal build),
 //
 // Run: npm run test:e2e
 //   CHROME=path      – a different Chrome/Chromium (searched in the usual places by default)
 //   HEADFUL=1        – show the browser window
 //   KEEP=1           – keep the profile and the downloaded files (the path is printed)
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchChrome, waitFor, sleep } from './cdp.mjs';
@@ -122,9 +125,9 @@ const downloaded = (prefix, ext) =>
 
 /** Plays a file from the downloads folder in Chrome and returns playback stats. */
 let player = null;
-async function play(name) {
+async function play(name, dir = chrome.downloads) {
   const route = '/dl/' + encodeURIComponent(name);
-  assets[route] = { type: 'video/mp4', body: () => fs.readFileSync(path.join(chrome.downloads, name)) };
+  assets[route] = { type: 'video/mp4', body: () => fs.readFileSync(path.join(dir, name)) };
   if (!player) {
     player = await openTarget(`${base}/player.html`);
     await waitFor(() => evaluate(player.sessionId, `typeof window.check === 'function'`));
@@ -138,7 +141,7 @@ const playsWell = (r, minDur = 7.5) =>
 
 try {
   const { id: extId } = await send('Extensions.loadUnpacked', { path: EXT_ROOT });
-  console.log('rozszerzenie:', extId);
+  console.log('extension:', extId);
 
   const swTarget = await waitFor(async () => {
     const { targetInfos } = await send('Target.getTargets');
@@ -528,6 +531,150 @@ try {
   const again = await waitFor(() => downloaded('flaky (1)', '.mp4'), 30000);
   check('history: "Download again"', !!again, again);
 
+  // ================= N: YouTube through the helper program (personal build) =================
+  // The extension talks to native/host.mjs; a test copy of the helper is registered under its own name
+  // (HKCU registry, removed at the end) and runs the fake yt-dlp from tests/fake-ytdlp.mjs.
+  const personal = JSON.parse(fs.readFileSync(path.join(EXT_ROOT, 'manifest.json'), 'utf8')).permissions.includes('nativeMessaging');
+  const ytTab = { id: 987654, windowId: 1, active: true, url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ', title: '(2) Big Buck Bunny - YouTube' };
+  const ytCard = (p) =>
+    evaluate(
+      p.sessionId,
+      `(() => { const c = document.querySelector('#list > .item.external'); return c && { name: c.querySelector('.fname').value, meta: c.querySelector('.meta').textContent,
+        note: c.querySelector('.note').hidden ? '' : c.querySelector('.note').textContent, button: !c.querySelector('.actions button').disabled,
+        options: [...c.querySelectorAll('.opts select:first-child option')].map(o => (o.disabled ? '-' : '') + o.textContent), quality: c.querySelector('.opts select')?.value }; })()`
+    );
+  const setHost = (name) =>
+    evaluate(sw, `chrome.storage.local.get('settings').then(({ settings }) => chrome.storage.local.set({ settings: { ...settings, nativeHost: ${JSON.stringify(name)} } }))`);
+  if (!personal) {
+    const p = await openPopup(ytTab);
+    await sleep(1500);
+    check('store package: no YouTube card in the popup', (await ytCard(p)) === null);
+    check('store package: no YouTube panel in the manager', !(await evaluate(mgr.sessionId, `!!document.querySelector('#youtube')`)));
+    await closeTarget(p);
+  } else if (process.platform !== 'win32') {
+    console.log('SKIP  YouTube: registering the test helper is implemented for Windows only');
+  } else {
+    // Helper missing: the popup says so and the manager panel shows how to install it.
+    await setHost('com.turbovd.ytdlp.missing');
+    await evaluate(mgr.sessionId, 'location.reload(), 1');
+    const panel = await waitFor(async () => {
+      const s = await evaluate(mgr.sessionId, `(() => { const d = document.querySelector('#youtube'); return d && !d.textContent.includes('checking') && { summary: d.querySelector('summary').textContent, open: d.open, code: [...d.querySelectorAll('code')].map(c => c.textContent) }; })()`);
+      return s || null;
+    }, 10000);
+    check(
+      'YouTube panel without the helper: open, with the install command',
+      panel?.summary === 'YouTube (yt-dlp) – not set up' && panel.open && panel.code.includes(`node native/install.mjs ${extId}`),
+      JSON.stringify(panel)
+    );
+    const pMissing = await openPopup(ytTab);
+    const missing = await waitFor(async () => {
+      const c = await ytCard(pMissing);
+      return c && c.note ? c : null;
+    }, 8000);
+    check(
+      'popup without the helper: YouTube card with a setup hint',
+      missing?.note.startsWith("The YouTube helper program isn't installed.") && missing.note.includes('How to set it up') && !missing.button && missing.name === 'Big Buck Bunny',
+      JSON.stringify(missing)
+    );
+    await closeTarget(pMissing);
+
+    const hostDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tvd-e2e-host-'));
+    const outDir = path.join(hostDir, 'out');
+    const TEST_HOST = 'com.turbovd.ytdlp.test';
+    const keys = ['Google\\Chrome', 'Chromium'].map((b) => `HKCU\\Software\\${b}\\NativeMessagingHosts\\${TEST_HOST}`);
+    const wrapper = path.join(hostDir, 'host.cmd');
+    const vars = {
+      TVD_YTDLP: fileURLToPath(new URL('./fake-ytdlp.mjs', import.meta.url)),
+      TVD_FFMPEG: 'none',
+      TVD_OUTDIR: outDir,
+      TVD_CONFIG: path.join(hostDir, 'no-config.json'),
+      TVD_LOG: path.join(hostDir, 'host.log'),
+      FAKE_YTDLP_DELAY: '120'
+    };
+    fs.writeFileSync(
+      wrapper,
+      ['@echo off', ...Object.entries(vars).map(([k, v]) => `set "${k}=${v}"`), `"${process.execPath}" "${path.join(EXT_ROOT, 'native', 'host.mjs')}" %*`, ''].join('\r\n')
+    );
+    const manifestPath = path.join(hostDir, `${TEST_HOST}.json`);
+    fs.writeFileSync(manifestPath, JSON.stringify({ name: TEST_HOST, description: 'test', path: wrapper, type: 'stdio', allowed_origins: [`chrome-extension://${extId}/`] }));
+    const regOk = keys.every((k) => spawnSync('reg', ['add', k, '/ve', '/t', 'REG_SZ', '/d', manifestPath, '/f'], { windowsHide: true }).status === 0);
+    check('YouTube: test helper registered', regOk);
+    try {
+      await setHost(TEST_HOST);
+      await evaluate(mgr.sessionId, `[...document.querySelectorAll('#youtube button')].find(b => b.textContent === 'Check again').click()`);
+      const ready = await waitFor(async () => {
+        const s = await evaluate(mgr.sessionId, `document.querySelector('#youtube').textContent`);
+        return s.includes('– ready') ? s : null;
+      }, 10000);
+      check('YouTube panel: ready, yt-dlp version and the output folder', ready?.includes('yt-dlp 2099.01.01 (fake) ✓') && ready.includes(outDir), ready?.slice(0, 200));
+
+      const pY = await openPopup(ytTab);
+      const ui = await waitFor(async () => {
+        const c = await ytCard(pY);
+        return c?.button ? c : null;
+      }, 15000);
+      check(
+        'popup: YouTube card with qualities from yt-dlp (WebM-only needs ffmpeg), 1080p by default',
+        ui?.options[0].startsWith('-1440p60 · VP9') && ui.options[0].includes('needs ffmpeg') && ui.options.some((o) => o.startsWith('1080p60 · H.264 · ~')) &&
+          ui.options.at(-1).startsWith('Audio only (M4A)') && ui.quality === '299' && ui.name === 'Big Buck Bunny test video [1080p60]' && ui.meta.includes('Test channel'),
+        JSON.stringify(ui)
+      );
+      await evaluate(
+        pY.sessionId,
+        `(() => { const c = document.querySelector('.item.external'); const s = c.querySelectorAll('.opts select')[1]; s.value = '0'; s.dispatchEvent(new Event('change'));
+          c.querySelector('.actions button').click(); })()`
+      );
+      await sleep(500);
+      await closeTarget(pY);
+      const running = await until('aqz-KE-bpKQ', /running/, 15000);
+      check('manager: the YouTube download runs with progress', /running/.test(running?.cls) && /Downloaded/.test(running.stats), `${running?.status} | ${running?.stats}`);
+      const cY = await until('aqz-KE-bpKQ', /done|error/, 30000);
+      const outFiles = fs.existsSync(outDir) ? fs.readdirSync(outDir) : [];
+      const mp4 = outFiles.find((f) => f.endsWith('[1080p60].mp4'));
+      const yPlay = mp4 && (await play(mp4, outDir));
+      check(
+        'YouTube → one MP4 + .srt in the helper folder, plays',
+        cY?.cls.includes('done') && cY.buttons.includes('Show in folder') && outFiles.some((f) => f.endsWith('[1080p60].en.srt')) && playsWell(yPlay),
+        `${cY?.status} [${cY?.buttons}] ${JSON.stringify(outFiles)} ${JSON.stringify(yPlay)}`
+      );
+
+      // Pause and resume: the helper keeps yt-dlp's partial file and continues it.
+      const pY2 = await openPopup(ytTab);
+      await waitFor(async () => (await ytCard(pY2))?.button || null, 10000);
+      await evaluate(pY2.sessionId, `(() => { const c = document.querySelector('.item.external'); c.querySelector('.fname').value = 'Paused bunny'; c.querySelector('.actions button').click(); })()`);
+      await sleep(500);
+      await closeTarget(pY2);
+      await waitFor(async () => {
+        const c = await card('Big Buck Bunny'); // the newest card comes first
+        return c && /running/.test(c.cls) && /Downloaded [1-9]/.test(c.stats) ? c : null;
+      }, 15000);
+      await evaluate(mgr.sessionId, `[...document.querySelectorAll('.job')].find(c => c.querySelector('.title').textContent.includes('Big Buck Bunny') && c.className.includes('running')).querySelector('.buttons button').click()`);
+      const paused = await until('Big Buck Bunny', /paused/, 10000);
+      check('YouTube: pause keeps the downloaded part ("Resume")', paused?.buttons.includes('Resume') && /Kept/.test(paused.stats), `${paused?.status} [${paused?.buttons}] ${paused?.stats}`);
+      const partial = fs.readdirSync(path.join(outDir, '.turbo-video-downloader')).length;
+      await evaluate(mgr.sessionId, `[...document.querySelectorAll('.job.paused .buttons button')].find(b => b.textContent === 'Resume').click()`);
+      await sleep(300);
+      const resumed = await waitFor(async () => {
+        const all = await evaluate(mgr.sessionId, `[...document.querySelectorAll('.job')].map(c => c.className + ' ' + c.querySelector('.status').textContent)`);
+        return all.filter((s) => /done/.test(s)).length >= 2 ? all : null;
+      }, 30000);
+      check(
+        'YouTube: resumed and finished, partial files removed',
+        !!resumed && partial === 1 && fs.existsSync(path.join(outDir, 'Paused bunny.mp4')) && !fs.existsSync(path.join(outDir, '.turbo-video-downloader')),
+        JSON.stringify(resumed)
+      );
+      const ytHist = await evaluate(
+        mgr.sessionId,
+        `[...document.querySelectorAll('#history .entry')].slice(0, 2).map(r => ({ name: r.querySelector('.name').textContent, show: !r.querySelector('button').disabled }))`
+      );
+      check('YouTube downloads in the history, "Show" available', ytHist[0]?.name.startsWith('Paused bunny.mp4') && ytHist.every((h) => h.show), JSON.stringify(ytHist));
+    } finally {
+      for (const k of keys) spawnSync('reg', ['delete', k, '/f'], { windowsHide: true });
+      await setHost('');
+      fs.rmSync(hostDir, { recursive: true, force: true });
+    }
+  }
+
   // ================= M: Polish user interface (chrome.i18n, a second browser with lang=pl) =================
   const plChrome = await launchChrome({ lang: 'pl' });
   try {
@@ -560,7 +707,7 @@ try {
     await plChrome.close();
   }
 } catch (e) {
-  check('przebieg testu', false, e.stack);
+  check('test run', false, e.stack);
   console.log(chrome.stderr().slice(-3000));
 } finally {
   const failed = results.filter((r) => !r.ok).length;

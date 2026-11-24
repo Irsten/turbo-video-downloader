@@ -493,5 +493,89 @@
   },
   "emptyJobs": {
     "message": "Brak pobrań. Kliknij ikonę rozszerzenia na stronie z filmem i wybierz „⚡ Pobierz”."
+  },
+  "ytErrNoHost": {
+    "message": "Program pomocniczy do YouTube nie jest zainstalowany."
+  },
+  "ytErrForbidden": {
+    "message": "Program pomocniczy do YouTube nie przyjmuje tego rozszerzenia – uruchom ponownie native/install.mjs z identyfikatorem tego rozszerzenia."
+  },
+  "ytErrNoYtdlp": {
+    "message": "Nie znaleziono yt-dlp – zainstaluj go (a potem uruchom ponownie przeglądarkę) albo wpisz jego ścieżkę w native/config.json."
+  },
+  "ytErrYtdlp": {
+    "message": "yt-dlp: $1"
+  },
+  "ytErrHostExited": {
+    "message": "Program pomocniczy do YouTube nieoczekiwanie się zakończył ($1). Szczegóły są w pliku turbo-video-downloader-host.log w folderze tymczasowym systemu."
+  },
+  "ytAsking": {
+    "message": "Pytam yt-dlp…"
+  },
+  "ytSetupLink": {
+    "message": "Jak to skonfigurować"
+  },
+  "ytTryAgain": {
+    "message": "Spróbuj ponownie"
+  },
+  "ytLiveUnsupported": {
+    "message": "Transmisji na żywo z YouTube nie da się pobrać."
+  },
+  "ytNoFormats": {
+    "message": "yt-dlp nie znalazł żadnego formatu do pobrania."
+  },
+  "ytAudioOnly": {
+    "message": "Tylko dźwięk ($1)"
+  },
+  "ytAudio": {
+    "message": "dźwięk"
+  },
+  "ytNeedsFfmpeg": {
+    "message": "wymaga ffmpeg"
+  },
+  "ytFfmpegHint": {
+    "message": "Jakości dostępne tylko jako WebM (zwykle powyżej 1080p) wymagają ffmpeg – zobacz panel YouTube w menedżerze."
+  },
+  "ytSetupTitle": {
+    "message": "YouTube (yt-dlp)"
+  },
+  "ytSetupChecking": {
+    "message": "sprawdzam…"
+  },
+  "ytSetupReady": {
+    "message": "gotowe"
+  },
+  "ytSetupNotReady": {
+    "message": "nieskonfigurowane"
+  },
+  "ytSetupIntro": {
+    "message": "Filmy z YouTube pobiera yt-dlp – darmowy program na tym komputerze – przez małego pomocnika (native/host.mjs). Pliki trafiają prosto do folderu poniżej, z pominięciem listy pobranych plików przeglądarki."
+  },
+  "ytStatusYtdlp": {
+    "message": "yt-dlp $1 ✓"
+  },
+  "ytStatusFfmpeg": {
+    "message": "ffmpeg ✓ – dostępne są wszystkie jakości."
+  },
+  "ytStatusNoFfmpeg": {
+    "message": "Brak ffmpeg: obraz i dźwięk łączy rozszerzenie, które obsługuje tylko MP4/M4A, więc jakości dostępne wyłącznie jako WebM (zwykle powyżej 1080p) są wyłączone. Zainstaluj ffmpeg, żeby je odblokować."
+  },
+  "ytStatusFolder": {
+    "message": "Pliki są zapisywane w: $1"
+  },
+  "ytStepTools": {
+    "message": "1. Zainstaluj yt-dlp (wymagany) i ffmpeg (opcjonalny), np.:"
+  },
+  "ytStepInstall": {
+    "message": "2. Zainstaluj Node.js 20.16 lub nowszy, a potem uruchom w terminalu, w folderze rozszerzenia:"
+  },
+  "ytStepCheck": {
+    "message": "3. Kliknij „Sprawdź ponownie”."
+  },
+  "ytConfigHint": {
+    "message": "Jeśli yt-dlp jest zainstalowany gdzie indziej, wpisz jego ścieżkę w native/config.json („ytdlp”)."
+  },
+  "ytCheckAgain": {
+    "message": "Sprawdź ponownie"
   }
 }

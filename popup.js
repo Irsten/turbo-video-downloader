@@ -4,6 +4,7 @@ import { parseMpd, representationLabel, dashAudioOptions } from './lib/dash.js';
 import { makePrepare, FETCH_INIT } from './lib/net.js';
 import { enqueue, openManager, newJobId, unfinishedJobs, loadSettings } from './lib/jobs.js';
 import { tr, localize } from './lib/i18n.js';
+import { externalCard } from './lib/external.js';
 
 const $ = (s) => document.querySelector(s);
 const listEl = $('#list');
@@ -122,6 +123,9 @@ async function startJob(job) {
   toast(tr(job.record ? 'toastRecording' : 'toastAdded'));
   updateFooter();
 }
+
+/** The tab's video handled by an external program (YouTube in the personal build) – a card that updates itself. */
+const extCard = externalCard({ tab, settings, el, startJob });
 
 /**
  * Skeleton of a list item: thumbnail, editable file name, description, actions, options.
@@ -393,7 +397,8 @@ async function render() {
       i.kind === 'file' ? renderFile(i, ctx) : i.kind === 'hls' ? renderHls(i, infos.get(i.url), ctx) : renderDash(i, infos.get(i.url), ctx);
 
     listEl.replaceChildren();
-    if (!current.length) {
+    if (extCard) listEl.append(extCard);
+    if (!current.length && !extCard) {
       listEl.append(
         el(
           'div',

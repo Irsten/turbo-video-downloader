@@ -1,6 +1,6 @@
 # Turbo Video Downloader (Opera / Chromium)
 
-The extension detects videos on web pages and downloads them **over many connections at once** – into one MP4 file, with subtitles, with resuming (also after a browser restart) and with live stream recording.
+The extension detects videos on web pages and downloads them **over many connections at once** – into one MP4 file, with subtitles, with resuming (also after a browser restart) and with live stream recording. The version from this repository can also download from YouTube, through yt-dlp.
 
 ## Installing in Opera
 
@@ -10,7 +10,7 @@ The extension detects videos on web pages and downloads them **over many connect
 4. Pin the extension icon to the toolbar (puzzle icon → pin).
 5. **Reload** the tabs that were open before the installation.
 
-After updating to a newer version, click **Reload** on the extension (version 1.2 added permissions for the context menu and notifications).
+After updating to a newer version, click **Reload** on the extension (version 1.2 added permissions for the context menu and notifications, 1.4 – for the YouTube helper program).
 
 It also works in Chrome, Edge, Brave and Vivaldi (same steps, e.g. `chrome://extensions`).
 
@@ -51,6 +51,33 @@ For an HLS live stream the popup shows **⏺ Record**. Recording goes on until y
 ### Pages without reloads
 
 On pages that change the address without reloading (X, Instagram…), the badge on the icon counts the videos of the current sub-page, and those from earlier sub-pages are in the collapsed **Earlier on this tab** section of the popup.
+
+## YouTube (personal build)
+
+The version from this repository can also download from YouTube – **the store package doesn't** (`npm run package` leaves it out). The extension doesn't fetch YouTube's streams itself: [yt-dlp](https://github.com/yt-dlp/yt-dlp), a free program on your computer, does the downloading, and the extension talks to it through a small helper, `native/host.mjs` (Chrome's "native messaging").
+
+Setting it up (once):
+
+1. Install yt-dlp – and, optionally, ffmpeg:
+   - Windows: `winget install yt-dlp.yt-dlp Gyan.FFmpeg`
+   - macOS: `brew install yt-dlp ffmpeg`
+   - Linux: `pipx install yt-dlp` and ffmpeg from your distribution
+2. Install [Node.js](https://nodejs.org) 20.16 or newer.
+3. Open the download manager: the **YouTube (yt-dlp)** panel shows the command with your extension's ID. Run it in a terminal, in the extension's folder:
+   ```bash
+   node native/install.mjs <extension-id>
+   ```
+   It registers the helper with Chrome (also read by Opera and Vivaldi), Edge, Brave and Chromium of the current user, and creates `native/config.json`.
+4. Click **Check again** in the panel – it shows the yt-dlp version, whether ffmpeg was found and the folder for the files.
+
+Then open a video on YouTube and click the extension icon: the card shows the qualities from yt-dlp with their sizes, **Audio only (M4A)** and the subtitles. The download appears in the manager like any other – with progress, **Pause** / **Resume** (yt-dlp continues its partial file) and history.
+
+- The files go straight to the folder from `native/config.json` (your downloads folder by default), not through the browser's download list – **Show in folder** opens it. Partial downloads wait in its `.turbo-video-downloader` subfolder.
+- **Without ffmpeg** video and audio are merged into one MP4 by the extension's own remuxer, which handles MP4/M4A only – so qualities available only as WebM (usually above 1080p) are off. **With ffmpeg** yt-dlp merges everything, all qualities are available.
+- Subtitles are saved next to the video as `.srt`. Live streams aren't supported.
+- `native/config.json`: `ytdlp` and `ffmpeg` (paths, if they aren't in `PATH`; `"ffmpeg": "none"` turns ffmpeg off), `outDir`, `extraArgs` – extra yt-dlp arguments, e.g. `["--cookies", "C:/Users/me/cookies.txt"]` when YouTube asks to sign in.
+- If something goes wrong, the helper writes `turbo-video-downloader-host.log` in the system temp folder. `node native/install.mjs --uninstall` removes the registration.
+- Download only what you're allowed to: YouTube's terms of service forbid downloading without its permission, except where it offers a download option itself.
 
 ## Where the speed comes from
 
@@ -96,7 +123,7 @@ ffmpeg -i "video.ts" -c copy "video.mp4"
 | DASH live, DASH with several periods | ❌ no live; of several periods only the first one is downloaded |
 | WebVTT subtitles (HLS, DASH, `<track>` on the page) | ✅ saved as `.srt` next to the video |
 | DRM-protected / encrypted content (Netflix, Disney+, paid VOD…) | ❌ deliberately not supported |
-| YouTube | ❌ deliberately disabled (its terms forbid downloading) |
+| YouTube | ✅ personal build only, through yt-dlp – see [YouTube (personal build)](#youtube-personal-build); ❌ not in the store package |
 
 ## Limitations
 
@@ -109,17 +136,19 @@ Requirements: Node 20.16+ and – for the browser tests – Chrome 126+. Install
 
 ```bash
 npm run lint         # ESLint
-npm test             # engine, HLS/DASH/subtitle parsers, merging into MP4, translations – a dozen or so seconds
+npm test             # engine, HLS/DASH/subtitle parsers, merging into MP4, translations, YouTube helper – a dozen or so seconds
 npm run test:remux   # merging into MP4 checked with the Chrome player
 npm run test:e2e     # the whole extension in a background Chrome (English and Polish UI), on a temporary profile
-npm run package      # dist/turbo-video-downloader-<version>.zip for Opera Add-ons / Chrome Web Store
+npm run package      # dist/turbo-video-downloader-<version>.zip for Opera Add-ons / Chrome Web Store (without YouTube)
 ```
 
 A local test server simulates expired links, 403/404 errors, dropped connections, a slow connection, servers without Range, a live stream, HLS and DASH. The Chrome tests find the browser on their own (point to another one with the `CHROME` variable). `HEADFUL=1` shows the window, and `KEEP=1` keeps the profile and the downloaded files for inspection. To test the store package itself, unpack the zip and run `EXT_ROOT=<folder> npm run test:e2e`.
 
+The YouTube helper is tested with a fake yt-dlp (`tests/fake-ytdlp.mjs`: the info JSON from `tests/fixtures/ytdlp-info.json`, downloads of the test recordings with progress, resuming and merging). The browser test registers a test copy of the helper as `com.turbovd.ytdlp.test` in the current user's registry (Windows only) and removes it at the end; the store package is checked to have no YouTube at all.
+
 The test recordings in `tests/fixtures/` (H.264/AAC from WebCodecs, MP4 from MediaRecorder) were generated by Chrome; `npm run fixtures` creates them again.
 
-`npm run package` puts only the runtime files into the zip (no tests, configs or `node_modules`) and first checks that everything the manifest, the pages and the imports refer to is inside, and that all translations have the same keys.
+`npm run package` puts only the runtime files into the zip (no tests, configs or `node_modules`) and leaves the personal build out: `lib/external.js` is replaced with the stub from `scripts/store/`, the manifest loses the `nativeMessaging` permission and the translations their `yt*` messages. First it checks that everything the manifest, the pages and the imports refer to is inside, that all translations have the same keys and that nothing of the personal build is left.
 
 ### Translations
 
@@ -143,8 +172,10 @@ lib/net.js           – Referer/Origin headers (declarativeNetRequest)
 lib/media.js         – format detection, file names
 lib/jobs.js          – queue and settings
 lib/i18n.js          – translations (chrome.i18n)
+lib/external.js      – YouTube through the helper program (personal build; scripts/store/external.js in the store package)
+native/              – the helper program: host.mjs (native messaging + yt-dlp), install.mjs (registration), config.mjs
 _locales/            – texts in English (default) and Polish
-tests/               – tests (Node and Chrome) and test recordings
+tests/               – tests (Node and Chrome), test recordings and a fake yt-dlp
 scripts/package.mjs  – building the store zip
 package.json         – dev scripts (the extension does not use Node)
 eslint.config.js     – ESLint configuration

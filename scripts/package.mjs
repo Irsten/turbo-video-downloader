@@ -1,6 +1,9 @@
 // Builds the store package: dist/turbo-video-downloader-<version>.zip with manifest.json at its root.
-// Only runtime files go in (no tests, node_modules or configs). Before zipping it checks that every
-// file referenced by the manifest, the HTML pages and the JS imports is part of the package.
+// Only runtime files go in (no tests, node_modules or configs), and none of the personal build:
+// lib/external.js (YouTube through yt-dlp) is replaced with the stub from scripts/store/, the manifest
+// loses the nativeMessaging permission and the translations lose their yt* messages.
+// Before zipping it checks that every file referenced by the manifest, the HTML pages and the JS imports
+// is part of the package, that all translations have the same keys and that nothing personal is left.
 // Run: npm run package
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,6 +13,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ROOT_FILES = ['manifest.json', 'background.js', 'content.js', 'popup.html', 'popup.js', 'manager.html', 'manager.js', 'ui.css'];
 const DIRS = ['icons', 'lib', '_locales'];
+// Personal build only.
+const STORE_STUBS = { 'lib/external.js': 'scripts/store/external.js' };
+const PERSONAL_PERMISSIONS = ['nativeMessaging'];
+const PERSONAL_MESSAGE = /^yt[A-Z]/;
 
 const walk = (dir) =>
   fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((e) => {
@@ -19,7 +26,26 @@ const walk = (dir) =>
 
 const files = [...ROOT_FILES, ...DIRS.filter((d) => fs.existsSync(path.join(ROOT, d))).flatMap(walk)].sort();
 const included = new Set(files);
-const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel));
+const json = (buf) => JSON.parse(buf.toString('utf8'));
+const toJson = (obj) => Buffer.from(JSON.stringify(obj, null, 2) + '\n', 'utf8');
+
+/** A file as it goes into the package. */
+function packaged(rel) {
+  if (STORE_STUBS[rel]) return read(STORE_STUBS[rel]);
+  if (rel === 'manifest.json') {
+    const m = json(read(rel));
+    m.permissions = (m.permissions || []).filter((p) => !PERSONAL_PERMISSIONS.includes(p));
+    return toJson(m);
+  }
+  if (/^_locales\/[^/]+\/messages\.json$/.test(rel)) {
+    return toJson(Object.fromEntries(Object.entries(json(read(rel))).filter(([k]) => !PERSONAL_MESSAGE.test(k))));
+  }
+  return read(rel);
+}
+const contents = new Map(files.map((f) => [f, packaged(f)]));
+const text = (f) => contents.get(f).toString('utf8');
+const manifest = json(contents.get('manifest.json'));
 
 // ---------------------------------------------------------------- checks
 const problems = [];
@@ -33,7 +59,7 @@ need(manifest.action?.default_popup, 'manifest.json (action)');
 for (const p of Object.values({ ...manifest.icons, ...manifest.action?.default_icon })) need(p, 'manifest.json (icons)');
 if (manifest.default_locale) need(`_locales/${manifest.default_locale}/messages.json`, 'manifest.json (default_locale)');
 
-const messageKeys = (locale) => Object.keys(JSON.parse(fs.readFileSync(path.join(ROOT, `_locales/${locale}/messages.json`), 'utf8')));
+const messageKeys = (locale) => Object.keys(json(contents.get(`_locales/${locale}/messages.json`)));
 const locales = files.filter((f) => /^_locales\/[^/]+\/messages\.json$/.test(f)).map((f) => f.split('/')[1]);
 if (manifest.default_locale) {
   const base = new Set(messageKeys(manifest.default_locale));
@@ -48,14 +74,28 @@ if (manifest.default_locale) {
 for (const f of files) {
   const dir = path.posix.dirname(f);
   if (f.endsWith('.html')) {
-    const html = fs.readFileSync(path.join(ROOT, f), 'utf8');
-    for (const m of html.matchAll(/\b(?:src|href)="([^":#?]+)"/g)) need(path.posix.join(dir, m[1]), f);
+    for (const m of text(f).matchAll(/\b(?:src|href)="([^":#?]+)"/g)) need(path.posix.join(dir, m[1]), f);
   } else if (f.endsWith('.js')) {
-    const js = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const js = text(f);
     for (const m of js.matchAll(/(?:from|import)\s*\(?\s*'(\.{1,2}\/[^']+)'/g)) need(path.posix.join(dir, m[1]), f);
     for (const m of js.matchAll(/new URL\('(\.{1,2}\/[^']+)', import\.meta\.url\)/g)) need(path.posix.join(dir, m[1]), f);
   }
 }
+
+// A stub must export everything the real module does – the other files import from it.
+const exportsOf = (src) => new Set([...src.matchAll(/export\s+(?:async\s+)?(?:const|let|function|class)\s+(\w+)/g)].map((m) => m[1]));
+for (const [rel, stub] of Object.entries(STORE_STUBS)) {
+  const has = exportsOf(read(stub).toString('utf8'));
+  for (const name of exportsOf(read(rel).toString('utf8'))) if (!has.has(name)) problems.push(`${stub} doesn't export ${name} of ${rel}`);
+}
+// Nothing of the personal build may be left.
+for (const f of files) {
+  if (!/\.(js|html|json)$/.test(f)) continue;
+  const s = text(f);
+  if (/connectNative|sendNativeMessage|nativeMessaging/.test(s)) problems.push(`${f} still uses native messaging`);
+  for (const m of s.matchAll(/\btr\('(yt[A-Z]\w*)'/g)) problems.push(`${f} uses the personal-build message ${m[1]}`);
+}
+
 if (problems.length) {
   console.error('The package would be incomplete:\n  ' + problems.join('\n  '));
   process.exit(1);
@@ -81,7 +121,7 @@ const chunks = [];
 const central = [];
 let offset = 0;
 for (const name of files) {
-  const data = fs.readFileSync(path.join(ROOT, name));
+  const data = contents.get(name);
   const packed = zlib.deflateRawSync(data, { level: 9 });
   const store = packed.length >= data.length; // e.g. PNG – already compressed
   const body = store ? data : packed;
