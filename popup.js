@@ -3,9 +3,11 @@ import { parseM3U8, variantLabel, audioOptions, subtitleOptions, mediaLabel } fr
 import { parseMpd, representationLabel, dashAudioOptions } from './lib/dash.js';
 import { makePrepare, FETCH_INIT } from './lib/net.js';
 import { enqueue, openManager, newJobId, unfinishedJobs, loadSettings } from './lib/jobs.js';
+import { tr, localize } from './lib/i18n.js';
 
 const $ = (s) => document.querySelector(s);
 const listEl = $('#list');
+localize();
 
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 const settings = await loadSettings();
@@ -117,7 +119,7 @@ function thumbOf(item, single) {
 
 async function startJob(job) {
   await enqueue({ id: newJobId(), createdAt: Date.now(), ...job });
-  toast(job.record ? 'Recording started in the manager ⏺' : 'Added to the download manager ⚡');
+  toast(tr(job.record ? 'toastRecording' : 'toastAdded'));
   updateFooter();
 }
 
@@ -131,7 +133,7 @@ function card(item, defName, badge, ctx) {
     class: 'fname',
     type: 'text',
     spellcheck: 'false',
-    title: 'File name (without extension) – you can change it before downloading',
+    title: tr('fileNameTitle'),
     oninput: (e) => (s.name = e.target.value)
   });
   input.value = s.name ?? defName;
@@ -152,9 +154,9 @@ function card(item, defName, badge, ctx) {
 /** Subtitle choice: '' = none, 'all' = all of them, or an index. */
 function subtitlePicker(item, subs, label) {
   if (!subs.length) return null;
-  const options = [['', 'No subtitles'], ...subs.map((s, i) => [String(i), `Subtitles: ${label(s)}`])];
-  if (subs.length > 1) options.push(['all', 'All subtitles']);
-  return select('Subtitles (saved next to the video as .srt)', options, sel(item.url).s ?? '', (v) => (sel(item.url).s = v));
+  const options = [['', tr('subtitlesNone')], ...subs.map((s, i) => [String(i), tr('subtitlesItem', label(s))])];
+  if (subs.length > 1) options.push(['all', tr('subtitlesAll')]);
+  return select(tr('subtitlesTitle'), options, sel(item.url).s ?? '', (v) => (sel(item.url).s = v));
 }
 const chosenSubs = (item, subs) => {
   const v = sel(item.url).s ?? '';
@@ -171,7 +173,7 @@ function renderFile(item, ctx) {
     'button',
     {
       class: 'primary',
-      title: 'Download over many connections at once',
+      title: tr('downloadTitle'),
       onclick: () =>
         startJob({
           kind: 'file',
@@ -183,18 +185,18 @@ function renderFile(item, ctx) {
           subs: chosenSubs(item, subs)
         })
     },
-    '⚡ Download'
+    tr('download')
   );
   const plain = el(
     'button',
     {
-      title: 'Regular browser download (1 connection, without the page headers)',
+      title: tr('plainDownloadTitle'),
       onclick: async () => {
         try {
           await chrome.downloads.download({ url: item.url, filename: `${c.name()}.${ext || 'mp4'}`, conflictAction: 'uniquify' });
-          toast('Handed over to the browser downloads');
+          toast(tr('toastHanded'));
         } catch (e) {
-          toast('Error: ' + e.message);
+          toast(tr('toastError', e.message));
         }
       }
     },
@@ -202,9 +204,9 @@ function renderFile(item, ctx) {
   );
   c.actions.append(turbo, plain);
   if (video?.duration) c.meta.append(el('span', {}, formatDuration(video.duration)));
-  c.meta.append(el('span', {}, item.size ? formatBytes(item.size) : 'size unknown'));
+  c.meta.append(el('span', {}, item.size ? formatBytes(item.size) : tr('sizeUnknown')));
   c.tail();
-  const sp = subtitlePicker(item, subs, (s) => s.label || s.lang || 'subtitles');
+  const sp = subtitlePicker(item, subs, (s) => s.label || s.lang || tr('subtitlesFallback'));
   if (sp) c.opts.append(sp);
   return c.box;
 }
@@ -215,50 +217,50 @@ function renderHls(item, info, ctx) {
   const c = card(item, defaultName(item, variant?.height ? `${variant.height}p` : ''), el('span', { class: 'badge hls' }, 'HLS'), ctx);
   const { box, meta, actions, opts } = c;
   if (!info) {
-    meta.append(el('span', { class: 'muted' }, 'analyzing the playlist…'));
-    actions.append(el('button', { class: 'primary', disabled: '' }, '⚡ Download'));
+    meta.append(el('span', { class: 'muted' }, tr('analyzingPlaylist')));
+    actions.append(el('button', { class: 'primary', disabled: '' }, tr('download')));
     return box;
   }
-  const btn = el('button', { class: 'primary' }, info.live ? '⏺ Record' : '⚡ Download');
-  if (info.live) btn.title = 'Records the live stream until you stop it in the download manager';
+  const btn = el('button', { class: 'primary' }, info.live ? tr('record') : tr('download'));
+  if (info.live) btn.title = tr('recordTitle');
   actions.append(btn);
   const base = { kind: 'hls', url: item.url, headers: item.headers, record: !!info.live };
   const label = nameFromUrl(item.url) || 'stream';
 
   if (info.error) {
-    meta.append(el('span', { class: 'muted' }, "couldn't read the playlist – will try anyway"));
+    meta.append(el('span', { class: 'muted' }, tr('playlistUnreadable')));
     btn.onclick = () => startJob({ ...base, filename: c.name(), label });
     return box;
   }
   if (info.encrypted) {
     btn.disabled = true;
-    btn.textContent = '🔒 Encrypted';
-    box.append(el('div', { class: 'note' }, 'Protected stream (DRM / encryption) – cannot be downloaded.'));
+    btn.textContent = tr('encrypted');
+    box.append(el('div', { class: 'note' }, tr('protectedStream')));
     return box;
   }
-  if (info.live) meta.append(el('span', { class: 'badge live' }, 'LIVE'));
+  if (info.live) meta.append(el('span', { class: 'badge live' }, tr('live')));
 
   if (info.kind === 'master') {
     if (!info.variants.length) {
       btn.disabled = true;
-      meta.append(el('span', { class: 'muted' }, 'no video variants'));
+      meta.append(el('span', { class: 'muted' }, tr('noVariants')));
       return box;
     }
     opts.prepend(
-      select('Quality (estimated size)', info.variants.map((v, i) => [String(i), variantLabel(v) + estimate(v.bandwidth, info.duration)]), s.v ?? '0', (v) => {
+      select(tr('qualityTitle'), info.variants.map((v, i) => [String(i), variantLabel(v) + estimate(v.bandwidth, info.duration)]), s.v ?? '0', (v) => {
         s.v = v;
         redraw();
       })
     );
     const audios = audioOptions(info, variant);
     if (audios.length > 1) {
-      opts.append(select('Audio track', audios.map((a, i) => [String(i), `Audio: ${mediaLabel(a)}`]), s.a ?? '0', (v) => (s.a = v)));
+      opts.append(select(tr('audioTrackTitle'), audios.map((a, i) => [String(i), tr('audioItem', mediaLabel(a))]), s.a ?? '0', (v) => (s.a = v)));
     }
     const subs = info.live ? [] : subtitleOptions(info, variant);
     const sp = subtitlePicker(item, subs, mediaLabel);
     if (sp) opts.append(sp);
     if (info.duration) meta.append(el('span', {}, formatDuration(info.duration)));
-    meta.append(el('span', {}, `${info.variants.length} ${info.variants.length === 1 ? 'quality' : 'qualities'}`));
+    meta.append(el('span', {}, info.variants.length === 1 ? tr('qualityOne') : tr('qualityMany', info.variants.length)));
     c.tail();
     btn.onclick = () => {
       const a = audios[Number(s.a ?? 0)];
@@ -276,7 +278,7 @@ function renderHls(item, info, ctx) {
 
   // media playlist (list of segments)
   if (!info.live) meta.append(el('span', {}, formatDuration(info.duration)));
-  meta.append(el('span', { class: 'muted' }, `${info.segments.length} segments`));
+  meta.append(el('span', { class: 'muted' }, tr('segmentsCount', info.segments.length)));
   c.tail();
   btn.onclick = () => startJob({ ...base, filename: c.name(), label });
   return box;
@@ -291,47 +293,47 @@ function renderDash(item, info, ctx) {
   const { box, meta, actions, opts } = c;
   const label = nameFromUrl(item.url) || 'manifest';
   if (!info) {
-    meta.append(el('span', { class: 'muted' }, 'analyzing the manifest…'));
-    actions.append(el('button', { class: 'primary', disabled: '' }, '⚡ Download'));
+    meta.append(el('span', { class: 'muted' }, tr('analyzingManifest')));
+    actions.append(el('button', { class: 'primary', disabled: '' }, tr('download')));
     return box;
   }
-  const btn = el('button', { class: 'primary' }, '⚡ Download');
+  const btn = el('button', { class: 'primary' }, tr('download'));
   actions.append(btn);
   if (info.error) {
-    meta.append(el('span', { class: 'muted' }, "couldn't read the manifest – will try anyway"));
+    meta.append(el('span', { class: 'muted' }, tr('manifestUnreadable')));
     btn.onclick = () => startJob({ kind: 'dash', url: item.url, headers: item.headers, filename: c.name(), label });
     return box;
   }
   if (info.dynamic) {
     btn.disabled = true;
-    meta.append(el('span', { class: 'badge live' }, 'LIVE'));
-    box.append(el('div', { class: 'note' }, 'Live streams in DASH format are not supported (HLS ones are).'));
+    meta.append(el('span', { class: 'badge live' }, tr('live')));
+    box.append(el('div', { class: 'note' }, tr('dashLiveUnsupported')));
     return box;
   }
   if (!videos.length && !audios.length) {
     btn.disabled = true;
-    btn.textContent = info.encrypted ? '🔒 Encrypted' : 'No tracks';
-    if (info.encrypted) box.append(el('div', { class: 'note' }, 'Protected stream (DRM) – cannot be downloaded.'));
+    btn.textContent = info.encrypted ? tr('encrypted') : tr('noTracks');
+    if (info.encrypted) box.append(el('div', { class: 'note' }, tr('protectedStream')));
     return box;
   }
   const audioBw = (audios[Number(s.a ?? 0)] || audios[0])?.bandwidth || 0;
   if (videos.length) {
     opts.prepend(
-      select('Quality (estimated size)', videos.map((r, i) => [String(i), representationLabel(r) + estimate(r.bandwidth + audioBw, info.duration)]), s.v ?? '0', (v) => {
+      select(tr('qualityTitle'), videos.map((r, i) => [String(i), representationLabel(r) + estimate(r.bandwidth + audioBw, info.duration)]), s.v ?? '0', (v) => {
         s.v = v;
         redraw();
       })
     );
   }
   if (audios.length > 1) {
-    opts.append(select('Audio track', audios.map((r, i) => [String(i), `Audio: ${mediaLabel({ name: r.label, language: r.lang })}`]), s.a ?? '0', (v) => (s.a = v)));
+    opts.append(select(tr('audioTrackTitle'), audios.map((r, i) => [String(i), tr('audioItem', mediaLabel({ name: r.label, language: r.lang }))]), s.a ?? '0', (v) => (s.a = v)));
   }
   const texts = info.text.filter((r) => r.container === 'vtt' && r.single);
   const sp = subtitlePicker(item, texts, (r) => mediaLabel({ name: r.label, language: r.lang }));
   if (sp) opts.append(sp);
   if (info.duration) meta.append(el('span', {}, formatDuration(info.duration)));
-  if (videos.length > 1) meta.append(el('span', {}, `${videos.length} qualities`));
-  if (info.multiPeriod) meta.append(el('span', { class: 'muted' }, 'first part only'));
+  if (videos.length > 1) meta.append(el('span', {}, tr('qualityMany', videos.length)));
+  if (info.multiPeriod) meta.append(el('span', { class: 'muted' }, tr('firstPartOnly')));
   c.tail();
   btn.onclick = () => {
     const a = audios[Number(s.a ?? 0)];
@@ -396,10 +398,10 @@ async function render() {
         el(
           'div',
           { class: 'empty' },
-          el('b', {}, earlier.length ? 'No videos detected on this sub-page yet.' : 'No videos detected on this tab yet.'),
+          el('b', {}, tr(earlier.length ? 'emptySubpage' : 'emptyTab')),
           el('br'),
-          'Start playing the video – the extension will pick it up from the network traffic. ',
-          earlier.length ? null : 'If the page was open before the extension was installed, reload it.'
+          tr('emptyHint') + ' ',
+          earlier.length ? null : tr('emptyReload')
         )
       );
     }
@@ -408,7 +410,7 @@ async function render() {
       const box = el(
         'details',
         { class: 'earlier', ontoggle: (e) => (earlierOpen = e.target.open) },
-        el('summary', {}, `Earlier on this tab (${earlier.length})`),
+        el('summary', {}, tr('earlierOnTab', earlier.length)),
         earlier.map(renderItem)
       );
       box.open = earlierOpen ?? !current.length;
@@ -431,8 +433,8 @@ listEl.addEventListener('focusout', (e) => {
 /** Count of unfinished downloads (interrupted by closing the manager or a restart). */
 async function updateFooter() {
   const open = (await unfinishedJobs()).filter((j) => j.status !== 'done').length;
-  $('#open-manager').textContent = open ? `Download manager (${open})` : 'Download manager';
-  $('#open-manager').title = open ? `${open} unfinished downloads – open the manager to resume them` : '';
+  $('#open-manager').textContent = open ? tr('managerButtonCount', open) : tr('managerButton');
+  $('#open-manager').title = open ? tr('managerUnfinished', open) : '';
 }
 
 $('#open-manager').onclick = () => openManager(true);

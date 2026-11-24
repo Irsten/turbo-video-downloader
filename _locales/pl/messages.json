@@ -1,0 +1,494 @@
+{
+  "extName": {
+    "message": "Turbo Video Downloader"
+  },
+  "extDescription": {
+    "message": "Wykrywa filmy (MP4, WebM, HLS, DASH) i szybko pobiera je wieloma połączeniami do jednego MP4 – z napisami i wznawianiem."
+  },
+  "ctxVideo": {
+    "message": "⚡ Pobierz ten film (Turbo)"
+  },
+  "ctxLink": {
+    "message": "⚡ Pobierz film z linku (Turbo)"
+  },
+  "hintStream": {
+    "message": "Ten film jest odtwarzany ze strumienia – kliknij ikonę rozszerzenia, żeby wybrać jakość."
+  },
+  "hintRefresh": {
+    "message": "Odśwież stronę z filmem i pobierz go ponownie."
+  },
+  "errEncrypted": {
+    "message": "Ten strumień jest zaszyfrowany (DRM / klucz AES). Takich treści rozszerzenie nie pobiera."
+  },
+  "errAccessDenied": {
+    "message": "Brak dostępu (HTTP $1) – link mógł wygasnąć albo wymaga zalogowania."
+  },
+  "errGone": {
+    "message": "Pod tym adresem nie ma już pliku (HTTP $1) – link wygasł albo film usunięto."
+  },
+  "errTooManyRequests": {
+    "message": "Serwer ogranicza liczbę żądań (HTTP 429) – zmniejsz liczbę połączeń w ustawieniach i spróbuj ponownie."
+  },
+  "errServer": {
+    "message": "Błąd po stronie serwera (HTTP $1) – spróbuj ponownie za chwilę."
+  },
+  "errHttp": {
+    "message": "Serwer odpowiedział HTTP $1"
+  },
+  "errNotMedia": {
+    "message": "Zamiast filmu serwer zwrócił stronę WWW – link prawdopodobnie wygasł albo wymaga zalogowania."
+  },
+  "errCanceled": {
+    "message": "Anulowano"
+  },
+  "errDropped": {
+    "message": "Połączenie zerwane przed końcem pliku"
+  },
+  "errRangesStopped": {
+    "message": "Serwer przestał obsługiwać pobieranie zakresami"
+  },
+  "errDroppedChunk": {
+    "message": "Połączenie zerwane w trakcie fragmentu"
+  },
+  "errAssemble": {
+    "message": "Błąd składania pliku z fragmentów"
+  },
+  "errSizeMismatch": {
+    "message": "Rozmiar złożonego pliku się nie zgadza"
+  },
+  "errIncompleteSegment": {
+    "message": "Segment niepełny"
+  },
+  "errNoVariants": {
+    "message": "Playlista nie zawiera żadnych wariantów"
+  },
+  "errNestedMaster": {
+    "message": "Nieoczekiwana zagnieżdżona playlista master"
+  },
+  "errNoSegments": {
+    "message": "Playlista nie zawiera segmentów"
+  },
+  "errDashLive": {
+    "message": "Transmisje na żywo w formacie DASH nie są obsługiwane."
+  },
+  "errNoTracksInManifest": {
+    "message": "Manifest nie zawiera ścieżek do pobrania"
+  },
+  "errNotHls": {
+    "message": "To nie jest playlista HLS (.m3u8)"
+  },
+  "errNotDash": {
+    "message": "To nie jest manifest DASH (.mpd)"
+  },
+  "errNoSamples": {
+    "message": "Brak próbek do zapisania"
+  },
+  "errAudioNotAac": {
+    "message": "Ścieżka audio w formacie innym niż AAC"
+  },
+  "errVideoCodec": {
+    "message": "Kodek wideo $1 – łączenie w MP4 nieobsługiwane"
+  },
+  "errAudioCodec": {
+    "message": "Kodek audio $1 – łączenie w MP4 nieobsługiwane"
+  },
+  "errEncryptedTrack": {
+    "message": "Ścieżka zaszyfrowana (DRM)"
+  },
+  "errCodecChange": {
+    "message": "Zmiana kodeka w trakcie strumienia"
+  },
+  "errNoInit": {
+    "message": "Brak segmentu inicjalizującego (moov)"
+  },
+  "errWebm": {
+    "message": "Format WebM – łączenie w MP4 nieobsługiwane"
+  },
+  "errUnknownFormat": {
+    "message": "Nierozpoznany format segmentów"
+  },
+  "errNoTracksToMerge": {
+    "message": "Nie znaleziono ścieżek do połączenia"
+  },
+  "errDiskWrite": {
+    "message": "Błąd zapisu na dysk"
+  },
+  "errNoSpace": {
+    "message": "Brak miejsca na dysku"
+  },
+  "labelTrack": {
+    "message": "ścieżka"
+  },
+  "labelVariant": {
+    "message": "wariant"
+  },
+  "templateHelp": {
+    "message": "{title} – tytuł strony, {quality} – np. 720p, {file} – nazwa z adresu, {site} – domena, {date} – dzisiejsza data"
+  },
+  "toastRecording": {
+    "message": "Nagrywanie rozpoczęte w menedżerze ⏺"
+  },
+  "toastAdded": {
+    "message": "Dodano do menedżera pobierania ⚡"
+  },
+  "toastHanded": {
+    "message": "Przekazano do pobierania przeglądarki"
+  },
+  "toastError": {
+    "message": "Błąd: $1"
+  },
+  "fileNameTitle": {
+    "message": "Nazwa pliku (bez rozszerzenia) – możesz ją zmienić przed pobraniem"
+  },
+  "subtitlesNone": {
+    "message": "Bez napisów"
+  },
+  "subtitlesItem": {
+    "message": "Napisy: $1"
+  },
+  "subtitlesAll": {
+    "message": "Wszystkie napisy"
+  },
+  "subtitlesTitle": {
+    "message": "Napisy (zapisane obok filmu jako .srt)"
+  },
+  "subtitlesFallback": {
+    "message": "napisy"
+  },
+  "download": {
+    "message": "⚡ Pobierz"
+  },
+  "downloadTitle": {
+    "message": "Pobierz wieloma połączeniami naraz"
+  },
+  "plainDownloadTitle": {
+    "message": "Zwykłe pobieranie przez przeglądarkę (1 połączenie, bez nagłówków strony)"
+  },
+  "sizeUnknown": {
+    "message": "rozmiar nieznany"
+  },
+  "analyzingPlaylist": {
+    "message": "analizuję playlistę…"
+  },
+  "analyzingManifest": {
+    "message": "analizuję manifest…"
+  },
+  "record": {
+    "message": "⏺ Nagrywaj"
+  },
+  "recordTitle": {
+    "message": "Nagrywa transmisję, aż zatrzymasz ją w menedżerze pobierania"
+  },
+  "playlistUnreadable": {
+    "message": "nie udało się odczytać playlisty – spróbuję mimo to"
+  },
+  "manifestUnreadable": {
+    "message": "nie udało się odczytać manifestu – spróbuję mimo to"
+  },
+  "encrypted": {
+    "message": "🔒 Zaszyfrowane"
+  },
+  "protectedStream": {
+    "message": "Strumień chroniony (DRM / szyfrowanie) – nie do pobrania."
+  },
+  "live": {
+    "message": "NA ŻYWO"
+  },
+  "noVariants": {
+    "message": "brak wariantów wideo"
+  },
+  "qualityTitle": {
+    "message": "Jakość (szacowany rozmiar)"
+  },
+  "audioTrackTitle": {
+    "message": "Ścieżka dźwiękowa"
+  },
+  "audioItem": {
+    "message": "Audio: $1"
+  },
+  "qualityOne": {
+    "message": "1 jakość"
+  },
+  "qualityMany": {
+    "message": "$1 jakości"
+  },
+  "segmentsCount": {
+    "message": "$1 segmentów"
+  },
+  "dashLiveUnsupported": {
+    "message": "Transmisje na żywo w formacie DASH nie są obsługiwane (HLS – tak)."
+  },
+  "noTracks": {
+    "message": "Brak ścieżek"
+  },
+  "firstPartOnly": {
+    "message": "tylko pierwsza część"
+  },
+  "emptySubpage": {
+    "message": "Na tej podstronie nie wykryto jeszcze filmów."
+  },
+  "emptyTab": {
+    "message": "Nie wykryto jeszcze filmów na tej karcie."
+  },
+  "emptyHint": {
+    "message": "Uruchom odtwarzanie filmu – rozszerzenie wychwyci go z ruchu sieciowego."
+  },
+  "emptyReload": {
+    "message": "Jeśli strona była otwarta przed instalacją rozszerzenia, odśwież ją."
+  },
+  "earlierOnTab": {
+    "message": "Wcześniej na tej karcie ($1)"
+  },
+  "managerButton": {
+    "message": "Menedżer pobierania"
+  },
+  "managerButtonCount": {
+    "message": "Menedżer pobierania ($1)"
+  },
+  "managerUnfinished": {
+    "message": "Niedokończone pobrania: $1 – otwórz menedżer, żeby je wznowić"
+  },
+  "clear": {
+    "message": "Wyczyść"
+  },
+  "clearTitle": {
+    "message": "Wyczyść listę wykrytych filmów dla tej karty"
+  },
+  "managerTitle": {
+    "message": "Menedżer pobierania – Turbo Video Downloader"
+  },
+  "settingConnections": {
+    "message": "Połączenia na plik"
+  },
+  "settingConnectionsTitle": {
+    "message": "Ile równoległych połączeń HTTP na jeden plik (MP4/WebM). Do serwerów HTTP/1.1 przeglądarki oparte na Chromium otwierają maks. 6 połączeń na host."
+  },
+  "settingSegments": {
+    "message": "Segmenty naraz"
+  },
+  "settingSegmentsTitle": {
+    "message": "Ile segmentów HLS/DASH pobierać jednocześnie"
+  },
+  "settingParallel": {
+    "message": "Pobrania naraz"
+  },
+  "settingParallelTitle": {
+    "message": "Ile filmów pobierać jednocześnie (nagrywanie transmisji nie wlicza się do limitu)"
+  },
+  "settingMp4": {
+    "message": "Łącz w jeden plik MP4"
+  },
+  "settingMp4Title": {
+    "message": "Obraz, dźwięk i segmenty HLS/DASH składane w jeden plik .mp4 – bez ponownego kodowania, bez utraty jakości"
+  },
+  "settingSaveAs": {
+    "message": "Pytaj, gdzie zapisać"
+  },
+  "settingNotify": {
+    "message": "Powiadomienia"
+  },
+  "settingNotifyTitle": {
+    "message": "Powiadomienie po zakończeniu lub błędzie, gdy ta karta jest w tle"
+  },
+  "settingFileName": {
+    "message": "Nazwa pliku"
+  },
+  "diskNote": {
+    "message": "Pobierane dane trafiają od razu na dysk. Po zamknięciu tej karty albo restarcie przeglądarki pobieranie wznowi się po ponownym otwarciu menedżera."
+  },
+  "addPlaceholder": {
+    "message": "Wklej link do pliku wideo (.mp4, .webm…), playlisty .m3u8 albo manifestu .mpd"
+  },
+  "downloadsHeading": {
+    "message": "Pobrania"
+  },
+  "removeFinished": {
+    "message": "Usuń zakończone"
+  },
+  "historyHeading": {
+    "message": "Historia"
+  },
+  "clearHistory": {
+    "message": "Wyczyść historię"
+  },
+  "templatePreview": {
+    "message": "np. „$1”"
+  },
+  "templateSampleTitle": {
+    "message": "Film o kotach"
+  },
+  "infoLive": {
+    "message": "transmisja na żywo – pobieram dostępny fragment"
+  },
+  "infoConnections": {
+    "message": "połączeń równolegle: $1"
+  },
+  "infoNoRanges": {
+    "message": "serwer nie obsługuje zakresów – 1 połączenie"
+  },
+  "infoRecording": {
+    "message": "nagranie $1"
+  },
+  "infoAudio": {
+    "message": "audio: $1"
+  },
+  "infoOneMp4": {
+    "message": "jeden plik MP4"
+  },
+  "infoNotMerged": {
+    "message": "bez łączenia w MP4: $1"
+  },
+  "notifyDone": {
+    "message": "Pobrano film"
+  },
+  "notifyFailed": {
+    "message": "Pobieranie nie powiodło się"
+  },
+  "notifyDoneHint": {
+    "message": "$1 · kliknij, żeby pokazać w folderze"
+  },
+  "notifyFailedHint": {
+    "message": "kliknij, żeby otworzyć menedżer"
+  },
+  "historyEmpty": {
+    "message": "Tu pojawią się zakończone pobrania."
+  },
+  "show": {
+    "message": "Pokaż"
+  },
+  "showTitle": {
+    "message": "Pokaż plik w folderze"
+  },
+  "fileGone": {
+    "message": "Pliku nie ma już na dysku"
+  },
+  "downloadAgain": {
+    "message": "Pobierz ponownie"
+  },
+  "downloadAgainTitle": {
+    "message": "Dodaj to samo pobieranie jeszcze raz"
+  },
+  "historyRemoveTitle": {
+    "message": "Usuń z historii (plik zostaje na dysku)"
+  },
+  "errNothingRecorded": {
+    "message": "Nic nie zostało nagrane"
+  },
+  "errNothingDownloaded": {
+    "message": "Nic nie zostało pobrane"
+  },
+  "hintSeparateFiles": {
+    "message": "Obraz i dźwięk są w osobnych plikach. Połącz je bez utraty jakości:"
+  },
+  "hintTsFile": {
+    "message": "Plik .ts odtworzysz w VLC / MPC-HC. Zamiana na .mp4 (bez utraty jakości, kilka sekund):"
+  },
+  "errSaveCanceled": {
+    "message": "Zapis anulowany"
+  },
+  "errSaveFailed": {
+    "message": "Zapis nieudany ($1)"
+  },
+  "statusQueued": {
+    "message": "w kolejce"
+  },
+  "statusRunning": {
+    "message": "pobieranie…"
+  },
+  "statusRecording": {
+    "message": "⏺ nagrywanie…"
+  },
+  "statusPaused": {
+    "message": "wstrzymane"
+  },
+  "statusInterrupted": {
+    "message": "nagrywanie przerwane"
+  },
+  "statusProcessing": {
+    "message": "łączenie w MP4…"
+  },
+  "statusProcessingPct": {
+    "message": "łączenie w MP4… $1%"
+  },
+  "statusSaving": {
+    "message": "zapisywanie na dysk…"
+  },
+  "statusDone": {
+    "message": "gotowe ✓"
+  },
+  "statusError": {
+    "message": "błąd"
+  },
+  "statusUnsaved": {
+    "message": "pobrane, niezapisane"
+  },
+  "statDownloaded": {
+    "message": "Pobrano"
+  },
+  "downloadedOf": {
+    "message": "$1 z $2"
+  },
+  "statSpeed": {
+    "message": "Prędkość"
+  },
+  "statRemaining": {
+    "message": "Pozostało"
+  },
+  "statSegments": {
+    "message": "Segmenty"
+  },
+  "statRecorded": {
+    "message": "Nagrano"
+  },
+  "statTime": {
+    "message": "Czas"
+  },
+  "statAverage": {
+    "message": "Średnio"
+  },
+  "statKept": {
+    "message": "Zachowano"
+  },
+  "keptHint": {
+    "message": "$1 – „Wznów” dokończy pobieranie od tego miejsca"
+  },
+  "interruptedHint": {
+    "message": "Nagrany fragment jest na dysku – możesz go zapisać albo nagrywać dalej."
+  },
+  "pause": {
+    "message": "Wstrzymaj"
+  },
+  "pauseTitle": {
+    "message": "Pobrane dane zostają na dysku"
+  },
+  "stopAndSave": {
+    "message": "⏹ Zatrzymaj i zapisz"
+  },
+  "resume": {
+    "message": "Wznów"
+  },
+  "retry": {
+    "message": "Ponów"
+  },
+  "saveRecording": {
+    "message": "Zapisz nagrane"
+  },
+  "keepRecording": {
+    "message": "Nagrywaj dalej"
+  },
+  "save": {
+    "message": "Zapisz"
+  },
+  "showInFolder": {
+    "message": "Pokaż w folderze"
+  },
+  "removeJobTitle": {
+    "message": "Usuń (razem z pobranymi danymi)"
+  },
+  "confirmRemove": {
+    "message": "Usunąć to pobieranie razem z pobranymi danymi?"
+  },
+  "emptyJobs": {
+    "message": "Brak pobrań. Kliknij ikonę rozszerzenia na stronie z filmem i wybierz „⚡ Pobierz”."
+  }
+}

@@ -4,12 +4,19 @@
   "description": "Tests of the Turbo Video Downloader extension (the extension itself does not need Node).",
   "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": ">=20.16"
   },
   "scripts": {
-    "test": "node --test tests/engine.test.mjs tests/formats.test.mjs tests/remux.test.mjs",
+    "test": "node --test tests/engine.test.mjs tests/formats.test.mjs tests/remux.test.mjs tests/i18n.test.mjs",
     "test:remux": "node tests/remux.e2e.mjs",
     "test:e2e": "node tests/e2e.mjs",
+    "lint": "eslint .",
+    "package": "node scripts/package.mjs",
     "fixtures": "node tests/fixtures/generate.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.15.0",
+    "globals": "17.14.0"
   }
 }

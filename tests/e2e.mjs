@@ -432,7 +432,7 @@ try {
   , 8000);
   check('popup DASH: choice of quality and subtitles', dashUi?.quality?.[0]?.startsWith('180p · 0.20 Mb/s · ~') && dashUi?.subs?.includes('Subtitles: PL'), JSON.stringify(dashUi));
   await evaluate(pD.sessionId, `[...document.querySelectorAll('.item')].find(e => e.querySelector('.badge.dash')).querySelector('.actions button.primary').click()`);
-  const cD2 = await until('DASH video', /done|error/, 30000) || (await until('manifest.mpd · 180p', /done|error/, 1));
+  await until('manifest · 180p', /done|error/, 30000); // the popup job's label (the manager job has the same URL)
   const d2 = downloaded('DASH video', '.mp4');
   const d2Srt = downloaded('DASH video', '.srt');
   check('DASH from the popup → MP4 + .srt subtitles', !!d2 && d2Srt === 'DASH video [180p].pl.srt', `${d2} ${d2Srt}`);
@@ -527,6 +527,38 @@ try {
   await evaluate(mgr.sessionId, `[...document.querySelectorAll('#history .entry')].find(r => r.querySelector('.name').textContent.startsWith('flaky.mp4')).querySelectorAll('button')[1].click()`);
   const again = await waitFor(() => downloaded('flaky (1)', '.mp4'), 30000);
   check('history: "Download again"', !!again, again);
+
+  // ================= M: Polish user interface (chrome.i18n, a second browser with lang=pl) =================
+  const plChrome = await launchChrome({ lang: 'pl' });
+  try {
+    const { id: plId } = await plChrome.send('Extensions.loadUnpacked', { path: EXT_ROOT });
+    const pm = await plChrome.openTarget(`chrome-extension://${plId}/manager.html`);
+    await waitFor(() => plChrome.evaluate(pm.sessionId, `document.readyState === 'complete' && !!document.querySelector('#jobs .empty')`), 8000);
+    const ui = await plChrome.evaluate(
+      pm.sessionId,
+      `({ lang: chrome.i18n.getUILanguage(), h1: document.querySelector('h1').textContent, title: document.title,
+         label: document.querySelector('#settings label span').textContent, placeholder: document.querySelector('#add-url').placeholder,
+         empty: document.querySelector('#jobs .empty').textContent, preview: document.querySelector('#template-preview').textContent })`
+    );
+    check(
+      'Polish UI: manager texts from _locales/pl',
+      ui.lang.startsWith('pl') && ui.h1 === 'Menedżer pobierania' && ui.title.startsWith('Menedżer pobierania') && ui.label === 'Połączenia na plik' &&
+        ui.placeholder.startsWith('Wklej link') && ui.empty.startsWith('Brak pobrań') && ui.preview === 'np. „Film o kotach [720p]”',
+      JSON.stringify(ui)
+    );
+    const plAdd = (url) =>
+      plChrome.evaluate(pm.sessionId, `(() => { document.querySelector('#add-url').value = ${JSON.stringify(url)}; document.querySelector('#add-form').requestSubmit(); })()`);
+    await plAdd(`${base}/forbid.mp4`);
+    const plErr = await waitFor(
+      () => plChrome.evaluate(pm.sessionId, `document.querySelector('.job.error .status')?.textContent || null`),
+      15000
+    );
+    check('Polish UI: engine error with a substitution ($1 → 403)', /^błąd: Brak dostępu \(HTTP 403\) – link mógł wygasnąć/.test(plErr || ''), plErr);
+    const plButtons = await plChrome.evaluate(pm.sessionId, `[...document.querySelectorAll('.job .buttons button')].map(b => b.textContent)`);
+    check('Polish UI: job buttons', plButtons.includes('Ponów'), JSON.stringify(plButtons));
+  } finally {
+    await plChrome.close();
+  }
 } catch (e) {
   check('przebieg testu', false, e.stack);
   console.log(chrome.stderr().slice(-3000));

@@ -15,6 +15,7 @@ import {
 import { parseM3U8 } from './lib/hls.js';
 import { makePrepare, FETCH_INIT } from './lib/net.js';
 import { loadSettings, newJobId } from './lib/jobs.js';
+import { tr } from './lib/i18n.js';
 
 const SELF_ORIGIN = chrome.runtime.getURL('').replace(/\/$/, '');
 const MEDIA_TYPES = ['media', 'xmlhttprequest', 'other', 'object'];
@@ -87,8 +88,8 @@ const VIDEO_LINKS = ['mp4', 'm4v', 'webm', 'mov', 'mkv', 'm3u8', 'mpd'].map((e) 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.action.setBadgeBackgroundColor({ color: '#e5243b' });
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: 'tvd-video', title: '⚡ Download this video (Turbo)', contexts: ['video'] });
-    chrome.contextMenus.create({ id: 'tvd-link', title: '⚡ Download video from link (Turbo)', contexts: ['link'], targetUrlPatterns: VIDEO_LINKS });
+    chrome.contextMenus.create({ id: 'tvd-video', title: tr('ctxVideo'), contexts: ['video'] });
+    chrome.contextMenus.create({ id: 'tvd-link', title: tr('ctxLink'), contexts: ['link'], targetUrlPatterns: VIDEO_LINKS });
   });
 });
 
@@ -102,8 +103,8 @@ async function downloadFromContext(info, tab) {
       chrome.notifications.create('tvd-hint', {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
-        title: 'Turbo Video Downloader',
-        message: 'This video is played from a stream – click the extension icon to choose the quality.'
+        title: tr('extName'),
+        message: tr('hintStream')
       })
     );
     return null;
@@ -231,13 +232,28 @@ function addItem(tabId, item) {
   const prev = m.get(item.key);
   if (prev) {
     let changed = false;
-    if (item.size && (!prev.size || item.size > prev.size)) (prev.size = item.size), (changed = true);
-    if (item.mime && !prev.mime) (prev.mime = item.mime), (changed = true);
-    if (item.headers.referer && !prev.headers.referer) (prev.headers = item.headers), (changed = true);
+    if (item.size && (!prev.size || item.size > prev.size)) {
+      prev.size = item.size;
+      changed = true;
+    }
+    if (item.mime && !prev.mime) {
+      prev.mime = item.mime;
+      changed = true;
+    }
+    if (item.headers.referer && !prev.headers.referer) {
+      prev.headers = item.headers;
+      changed = true;
+    }
     // The video is in use again (back to a sub-page in an SPA, mini player) – assign it
     // to the current sub-page.
-    if (item.page && item.page !== prev.page) (prev.page = item.page), (changed = true);
-    if (item.title && item.page === prev.page && item.title !== prev.title) (prev.title = item.title), (changed = true);
+    if (item.page && item.page !== prev.page) {
+      prev.page = item.page;
+      changed = true;
+    }
+    if (item.title && item.page === prev.page && item.title !== prev.title) {
+      prev.title = item.title;
+      changed = true;
+    }
     if (changed) scheduleSave(tabId);
     if (prev.kind === 'hls' && !prev.hls) analyzeHls(tabId, prev);
     return;

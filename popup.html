@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Turbo Video Downloader</title>
+    <title data-i18n="extName">Turbo Video Downloader</title>
     <link rel="stylesheet" href="ui.css" />
     <style>
       body {
@@ -179,9 +179,9 @@
     <div id="page" class="muted ellipsis"></div>
     <div id="list"></div>
     <footer>
-      <button id="open-manager">Download manager</button>
+      <button id="open-manager" data-i18n="managerButton">Download manager</button>
       <span class="spacer"></span>
-      <button id="clear" class="ghost" title="Clear the list of detected videos for this tab">Clear</button>
+      <button id="clear" class="ghost" data-i18n="clear" data-i18n-title="clearTitle" title="Clear the list of detected videos for this tab">Clear</button>
     </footer>
     <div id="toast"></div>
     <script type="module" src="popup.js"></script>

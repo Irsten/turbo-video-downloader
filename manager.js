@@ -6,6 +6,7 @@ import { makePrepare, FETCH_INIT } from './lib/net.js';
 import { loadSettings, saveSettings, newJobId, takeJobs, JOB_PREFIX, loadHistory, saveHistory, addHistory } from './lib/jobs.js';
 import { variantLabel } from './lib/hls.js';
 import { representationLabel } from './lib/dash.js';
+import { tr, localize } from './lib/i18n.js';
 import {
   formatBytes,
   formatDuration,
@@ -18,16 +19,17 @@ import {
   applyTemplate,
   hostOf,
   DEFAULT_TEMPLATE,
-  TEMPLATE_HELP,
+  templateHelp,
   VIDEO_EXT
 } from './lib/media.js';
 
 const $ = (s, root = document) => root.querySelector(s);
 const jobsEl = $('#jobs');
+localize();
 const TITLE = document.title;
 
 // ---------------- settings ----------------
-let settings = await loadSettings();
+const settings = await loadSettings();
 const LIMITS = { connections: [1, 16], hlsConcurrency: [1, 32], maxParallel: [1, 6] };
 for (const [key, [min, max]] of Object.entries(LIMITS)) {
   const inp = $('#' + key);
@@ -51,10 +53,10 @@ for (const key of ['saveAs', 'mp4', 'notify']) {
 const tplInput = $('#template');
 const tplPreview = () =>
   ($('#template-preview').textContent =
-    'e.g. "' + applyTemplate(tplInput.value, { title: 'Cat video', quality: '720p', file: 'video', host: 'example.com' }) + '"');
+    tr('templatePreview', applyTemplate(tplInput.value, { title: tr('templateSampleTitle'), quality: '720p', file: 'video', host: 'example.com' })));
 tplInput.value = settings.template || DEFAULT_TEMPLATE;
 tplInput.placeholder = DEFAULT_TEMPLATE;
-tplInput.title = TEMPLATE_HELP;
+tplInput.title = templateHelp();
 tplInput.addEventListener('input', tplPreview);
 tplInput.addEventListener('change', () => {
   settings.template = tplInput.value.trim() || DEFAULT_TEMPLATE;
@@ -242,9 +244,9 @@ async function run(st, { finalizeOnly = false } = {}) {
   const onInfo = (i) => {
     const parts = [];
     if (i.variant) parts.push(job.kind === 'dash' ? representationLabel(i.variant) : variantLabel(i.variant));
-    if (i.audioTrack && (i.audioTrack.language || i.audioTrack.lang)) parts.push(`audio: ${(i.audioTrack.language || i.audioTrack.lang).toUpperCase()}`);
+    if (i.audioTrack && (i.audioTrack.language || i.audioTrack.lang)) parts.push(tr('infoAudio', (i.audioTrack.language || i.audioTrack.lang).toUpperCase()));
     if (i.duration && !i.recording) parts.push(formatDuration(i.duration));
-    if (i.live && !i.recording) parts.push('live stream – downloading the part available now');
+    if (i.live && !i.recording) parts.push(tr('infoLive'));
     st.info = parts.join(' · ');
   };
 
@@ -262,7 +264,7 @@ async function run(st, { finalizeOnly = false } = {}) {
           prepare,
           fetchInit: FETCH_INIT
         });
-        st.info = r.ranged ? `${r.connectionsUsed} parallel connections` : "the server doesn't support ranges – 1 connection";
+        st.info = r.ranged ? tr('infoConnections', r.connectionsUsed) : tr('infoNoRanges');
         const subtitles = await fetchTrackSubtitles(job.subs || [], prepare, signal);
         st.result = { kind: 'file', ext: job.ext || extFromMime(r.contentType) || 'mp4', subtitles };
       } else if (job.kind === 'dash') {
@@ -298,7 +300,7 @@ async function run(st, { finalizeOnly = false } = {}) {
           fetchInit: FETCH_INIT
         });
         st.result = { kind: 'segments', tracks: r.tracks, subtitles: r.subtitles };
-        if (job.record) st.info = `recording ${formatDuration(r.duration)}`;
+        if (job.record) st.info = tr('infoRecording', formatDuration(r.duration));
       }
       st.elapsed = (performance.now() - st.startedAt) / 1000;
       persist(st, true);
@@ -332,9 +334,9 @@ function notify(st) {
     .create(done ? `tvd-done:${st.downloadIds[0]}` : `tvd-err:${st.job.id}`, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title: done ? 'Video downloaded' : 'Download failed',
+      title: tr(done ? 'notifyDone' : 'notifyFailed'),
       message: done ? st.saved?.[0]?.name || st.job.filename : `${st.job.label || st.job.filename}: ${st.error || ''}`,
-      contextMessage: done ? `${formatBytes(st.saved.reduce((n, f) => n + f.size, 0))} · click to show in folder` : 'click to open the manager'
+      contextMessage: done ? tr('notifyDoneHint', formatBytes(st.saved.reduce((n, f) => n + f.size, 0))) : tr('notifyFailedHint')
     })
     .catch(() => {});
 }
@@ -396,7 +398,7 @@ async function renderHistory() {
   if (!list.length) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'Finished downloads will appear here.';
+    empty.textContent = tr('historyEmpty');
     historyEl.append(empty);
     return;
   }
@@ -410,18 +412,18 @@ async function renderHistory() {
     const when = document.createElement('div');
     when.className = 'when';
     when.textContent = `${formatBytes(e.size)} · ${hostOf(e.page || e.url)} · ${timeFmt.format(e.finishedAt)}`;
-    const show = button('Show', '', () => chrome.downloads.show(e.downloadIds[0]), 'Show the file in its folder');
+    const show = button(tr('show'), '', () => chrome.downloads.show(e.downloadIds[0]), tr('showTitle'));
     show.disabled = true;
     chrome.downloads.search({ id: e.downloadIds[0] }).then(([d]) => {
       const ok = d && d.state === 'complete' && d.exists !== false;
       show.disabled = !ok;
-      if (!ok) show.title = 'The file is no longer on disk';
+      if (!ok) show.title = tr('fileGone');
     });
-    const again = button('Download again', '', () => addJob({ ...e.job, id: newJobId(), createdAt: Date.now() }), 'Add the same download once more');
+    const again = button(tr('downloadAgain'), '', () => addJob({ ...e.job, id: newJobId(), createdAt: Date.now() }), tr('downloadAgainTitle'));
     const del = button('✕', 'ghost', async () => {
       await saveHistory((await loadHistory()).filter((x) => x.id !== e.id));
       renderHistory();
-    }, 'Remove from history (the file stays on disk)');
+    }, tr('historyRemoveTitle'));
     row.append(name, when, show, again, del);
     historyEl.append(row);
   }
@@ -440,7 +442,7 @@ function resultFromState(st) {
     const parts = s.order.map((k) => s.index?.[k]).filter(Boolean);
     if (parts.length) tracks.push({ role, parts, ext: role === 'audio' ? 'aac' : 'ts' });
   }
-  if (!tracks.length) throw new Error('Nothing has been recorded');
+  if (!tracks.length) throw new Error(tr('errNothingRecorded'));
   return { kind: 'segments', tracks, subtitles: [] };
 }
 
@@ -460,7 +462,7 @@ async function fetchTrackSubtitles(list, prepare, signal) {
   return out;
 }
 
-const subtitleName = (s, i) => sanitizeFilename(s.language || s.name || '', '') || `subtitles${i ? i + 1 : ''}`;
+const subtitleName = (s, i) => sanitizeFilename(s.language || s.name || '', '') || `${tr('subtitlesFallback')}${i ? i + 1 : ''}`;
 
 /** Builds the output files (MP4 or raw tracks + subtitles) and saves them to the downloads folder. */
 async function finalize(st) {
@@ -479,7 +481,7 @@ async function finalize(st) {
       if (!t.parts.length) continue;
       inputs.push({ ...t, blob: await (await openStoreFile(st, t.role)).blob() });
     }
-    if (!inputs.length) throw new Error('Nothing has been downloaded');
+    if (!inputs.length) throw new Error(tr('errNothingDownloaded'));
     let mp4 = null;
     if (settings.mp4) {
       try {
@@ -494,13 +496,13 @@ async function finalize(st) {
         });
       } catch (e) {
         if (!(e instanceof UnsupportedError)) console.warn('Merging into MP4 failed', e);
-        st.note = `not merged into MP4: ${e.message}`;
+        st.note = tr('infoNotMerged', e.message);
       }
     }
     if (mp4) {
       outputs.push({ blob: mp4.blob, name: `${base}.mp4` });
       start = mp4.start;
-      st.info = [st.info, 'one MP4 file'].filter(Boolean).join(' · ');
+      st.info = [st.info, tr('infoOneMp4')].filter(Boolean).join(' · ');
     } else {
       const names = inputs.map((t) => (t.role === 'audio' && inputs.length > 1 ? `${base} (audio).${t.ext}` : `${base}.${t.ext}`));
       inputs.forEach((t, i) => outputs.push({ blob: new Blob(t.parts.map(([p, s]) => t.blob.slice(p, p + s))), name: names[i] }));
@@ -518,12 +520,12 @@ async function finalize(st) {
 function rawHint(names, base) {
   if (names.length > 1)
     return {
-      text: 'Video and audio are in separate files. Merge them without quality loss:',
+      text: tr('hintSeparateFiles'),
       code: `ffmpeg -i "${names[0]}" -i "${names[1]}" -c copy "${base} (full).mp4"`
     };
   if (names[0].endsWith('.ts'))
     return {
-      text: 'Play the .ts file in VLC / MPC-HC. Converting to .mp4 (no quality loss, a few seconds):',
+      text: tr('hintTsFile'),
       code: `ffmpeg -i "${names[0]}" -c copy "${base}.mp4"`
     };
   return null;
@@ -578,9 +580,9 @@ async function saveBlob(blob, filename) {
       const ext = filename.split('.').pop();
       id = await chrome.downloads.download({ url, filename: `video.${ext}`, saveAs: settings.saveAs, conflictAction: 'uniquify' });
     }
-    if (id == null) throw new Error('Saving canceled');
+    if (id == null) throw new Error(tr('errSaveCanceled'));
     const { state, error } = await waitForDownload(id);
-    if (state !== 'complete') throw new Error(error === 'USER_CANCELED' ? 'Saving canceled' : `Saving failed (${error || state})`);
+    if (state !== 'complete') throw new Error(error === 'USER_CANCELED' ? tr('errSaveCanceled') : tr('errSaveFailed', error || state));
     return id;
   } finally {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
@@ -606,16 +608,16 @@ function waitForDownload(id) {
 
 // ---------------- user interface ----------------
 const STATUS_TEXT = {
-  queued: 'queued',
-  running: 'downloading…',
-  recording: '⏺ recording…',
-  paused: 'paused',
-  interrupted: 'recording interrupted',
-  processing: 'merging into MP4…',
-  saving: 'saving to disk…',
-  done: 'done ✓',
-  error: 'error',
-  unsaved: 'downloaded, not saved'
+  queued: tr('statusQueued'),
+  running: tr('statusRunning'),
+  recording: tr('statusRecording'),
+  paused: tr('statusPaused'),
+  interrupted: tr('statusInterrupted'),
+  processing: tr('statusProcessing'),
+  saving: tr('statusSaving'),
+  done: tr('statusDone'),
+  error: tr('statusError'),
+  unsaved: tr('statusUnsaved')
 };
 
 function button(label, cls, onclick, title) {
@@ -650,7 +652,7 @@ function update(st) {
   if (!c) return;
   c.className = `job ${st.status}`;
   let status = STATUS_TEXT[st.status];
-  if (st.status === 'processing' && st.progress) status = `merging into MP4… ${Math.round(st.progress * 100)}%`;
+  if (st.status === 'processing' && st.progress) status = tr('statusProcessingPct', Math.round(st.progress * 100));
   $('.status', c).textContent = status + (st.error ? `: ${st.error}` : '');
 
   // progress bar
@@ -667,22 +669,22 @@ function update(st) {
   // stats: [label, value] or plain text
   const stats = [];
   if (st.status === 'running') {
-    stats.push(['Downloaded', formatBytes(st.loaded) + (known ? ` of ${st.segs ? '~' : ''}${formatBytes(st.total)}` : '')]);
-    stats.push(['Speed', `${formatBytes(st.speed)}/s`]);
-    if (known && st.speed > 0) stats.push(['Remaining', formatDuration(Math.max(0, st.total - st.loaded) / st.speed)]);
-    if (st.segs) stats.push(['Segments', `${st.segs[0]}/${st.segs[1]}`]);
+    stats.push([tr('statDownloaded'), known ? tr('downloadedOf', formatBytes(st.loaded), (st.segs ? '~' : '') + formatBytes(st.total)) : formatBytes(st.loaded)]);
+    stats.push([tr('statSpeed'), `${formatBytes(st.speed)}/s`]);
+    if (known && st.speed > 0) stats.push([tr('statRemaining'), formatDuration(Math.max(0, st.total - st.loaded) / st.speed)]);
+    if (st.segs) stats.push([tr('statSegments'), `${st.segs[0]}/${st.segs[1]}`]);
   } else if (st.status === 'recording') {
-    stats.push(['Recorded', formatDuration(st.recorded || 0)]);
-    stats.push(['Downloaded', formatBytes(st.loaded)]);
-    stats.push(['Speed', `${formatBytes(st.speed)}/s`]);
+    stats.push([tr('statRecorded'), formatDuration(st.recorded || 0)]);
+    stats.push([tr('statDownloaded'), formatBytes(st.loaded)]);
+    stats.push([tr('statSpeed'), `${formatBytes(st.speed)}/s`]);
   } else if (['done', 'unsaved', 'saving'].includes(st.status) && st.elapsed) {
-    stats.push(['Downloaded', formatBytes(st.loaded)]);
-    stats.push(['Time', formatDuration(st.elapsed)]);
-    stats.push(['Average', `${formatBytes(st.loaded / Math.max(st.elapsed, 0.001))}/s`]);
+    stats.push([tr('statDownloaded'), formatBytes(st.loaded)]);
+    stats.push([tr('statTime'), formatDuration(st.elapsed)]);
+    stats.push([tr('statAverage'), `${formatBytes(st.loaded / Math.max(st.elapsed, 0.001))}/s`]);
   } else if (['error', 'paused', 'queued'].includes(st.status) && st.kept) {
-    stats.push(['Kept', `${formatBytes(st.kept)} – "Resume" will continue the download from here`]);
+    stats.push([tr('statKept'), tr('keptHint', formatBytes(st.kept))]);
   } else if (st.status === 'interrupted') {
-    stats.push('The recorded part is on disk – you can save it or keep recording.');
+    stats.push(tr('interruptedHint'));
   }
   if (st.info) stats.push(st.info);
   if (st.note) stats.push(st.note);
@@ -719,16 +721,16 @@ function update(st) {
     persist(st, true);
     pump();
   };
-  if (st.status === 'running') btns.append(button('Pause', '', () => st.ctrl.abort(), 'Downloaded data stays on disk'));
-  if (st.status === 'recording') btns.append(button('⏹ Stop and save', 'primary', () => st.stop.abort()));
-  if (st.status === 'paused' || st.status === 'error') btns.append(button(st.kept ? 'Resume' : 'Retry', 'primary', requeue));
+  if (st.status === 'running') btns.append(button(tr('pause'), '', () => st.ctrl.abort(), tr('pauseTitle')));
+  if (st.status === 'recording') btns.append(button(tr('stopAndSave'), 'primary', () => st.stop.abort()));
+  if (st.status === 'paused' || st.status === 'error') btns.append(button(tr(st.kept ? 'resume' : 'retry'), 'primary', requeue));
   if (st.status === 'interrupted') {
-    btns.append(button('Save recording', 'primary', () => run(st, { finalizeOnly: true })));
-    btns.append(button('Keep recording', '', requeue));
+    btns.append(button(tr('saveRecording'), 'primary', () => run(st, { finalizeOnly: true })));
+    btns.append(button(tr('keepRecording'), '', requeue));
   }
   if (st.status === 'unsaved')
     btns.append(
-      button('Save', 'primary', async () => {
+      button(tr('save'), 'primary', async () => {
         if (st.outputs?.length) {
           await saveAll(st);
           update(st);
@@ -736,13 +738,13 @@ function update(st) {
       })
     );
   if (st.status === 'done' && st.downloadIds?.length)
-    btns.append(button('Show in folder', '', () => chrome.downloads.show(st.downloadIds[0])));
-  if (!['processing', 'saving'].includes(st.status)) btns.append(button('✕', 'ghost', () => removeJob(st), 'Remove (together with the downloaded data)'));
+    btns.append(button(tr('showInFolder'), '', () => chrome.downloads.show(st.downloadIds[0])));
+  if (!['processing', 'saving'].includes(st.status)) btns.append(button('✕', 'ghost', () => removeJob(st), tr('removeJobTitle')));
 }
 
 function removeJob(st, ask = true) {
   const hasData = st.status !== 'done' && (st.kept || st.loaded || st.result);
-  if (ask && hasData && !confirm('Remove this download together with the downloaded data?')) return;
+  if (ask && hasData && !confirm(tr('confirmRemove'))) return;
   st.removed = true;
   forget(st);
   st.el?.remove();
@@ -759,7 +761,7 @@ function renderEmpty() {
   if (!empty) {
     empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'No downloads. Click the extension icon on a page with a video and choose "⚡ Download".';
+    empty.textContent = tr('emptyJobs');
     jobsEl.append(empty);
   }
 }

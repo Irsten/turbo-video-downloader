@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Download manager – Turbo Video Downloader</title>
+    <title data-i18n="managerTitle">Download manager – Turbo Video Downloader</title>
     <link rel="icon" href="icons/icon32.png" />
     <link rel="stylesheet" href="ui.css" />
     <style>
@@ -227,50 +227,50 @@
     <main>
       <header>
         <img class="logo" src="icons/icon48.png" alt="" />
-        <h1>Download manager</h1>
+        <h1 data-i18n="managerButton">Download manager</h1>
       </header>
 
       <section class="panel settings" id="settings">
-        <label title="How many parallel HTTP connections per file (MP4/WebM). For HTTP/1.1 servers Chromium-based browsers open at most 6 connections per host.">
-          Connections per file <input type="number" id="connections" min="1" max="16" />
+        <label data-i18n-title="settingConnectionsTitle" title="How many parallel HTTP connections per file (MP4/WebM). For HTTP/1.1 servers Chromium-based browsers open at most 6 connections per host.">
+          <span data-i18n="settingConnections">Connections per file</span> <input type="number" id="connections" min="1" max="16" />
         </label>
-        <label title="How many HLS/DASH segments to download at the same time">
-          Segments at once <input type="number" id="hlsConcurrency" min="1" max="32" />
+        <label data-i18n-title="settingSegmentsTitle" title="How many HLS/DASH segments to download at the same time">
+          <span data-i18n="settingSegments">Segments at once</span> <input type="number" id="hlsConcurrency" min="1" max="32" />
         </label>
-        <label title="How many videos to download at the same time (live recordings don't count towards the limit)">
-          Downloads at once <input type="number" id="maxParallel" min="1" max="6" />
+        <label data-i18n-title="settingParallelTitle" title="How many videos to download at the same time (live recordings don't count towards the limit)">
+          <span data-i18n="settingParallel">Downloads at once</span> <input type="number" id="maxParallel" min="1" max="6" />
         </label>
-        <label title="Video, audio and HLS/DASH segments are put together into one .mp4 file – no re-encoding, no quality loss">
-          <input type="checkbox" id="mp4" /> Merge into one MP4 file
+        <label data-i18n-title="settingMp4Title" title="Video, audio and HLS/DASH segments are put together into one .mp4 file – no re-encoding, no quality loss">
+          <input type="checkbox" id="mp4" /> <span data-i18n="settingMp4">Merge into one MP4 file</span>
         </label>
-        <label><input type="checkbox" id="saveAs" /> Ask where to save</label>
-        <label title="Notification when a download finishes or fails while this tab is in the background">
-          <input type="checkbox" id="notify" /> Notifications
+        <label><input type="checkbox" id="saveAs" /> <span data-i18n="settingSaveAs">Ask where to save</span></label>
+        <label data-i18n-title="settingNotifyTitle" title="Notification when a download finishes or fails while this tab is in the background">
+          <input type="checkbox" id="notify" /> <span data-i18n="settingNotify">Notifications</span>
         </label>
         <label class="template">
-          File name <input type="text" id="template" spellcheck="false" />
+          <span data-i18n="settingFileName">File name</span> <input type="text" id="template" spellcheck="false" />
           <span class="muted" id="template-preview"></span>
         </label>
-        <p class="note">
+        <p class="note" data-i18n="diskNote">
           Downloaded data goes straight to disk. If you close this tab or restart the browser,
           downloads resume when you open the manager again.
         </p>
       </section>
 
       <form class="panel add" id="add-form">
-        <input type="url" id="add-url" placeholder="Paste a link to a video file (.mp4, .webm…), an .m3u8 playlist or an .mpd manifest" required />
-        <button class="primary" type="submit">⚡ Download</button>
+        <input type="url" id="add-url" data-i18n-placeholder="addPlaceholder" placeholder="Paste a link to a video file (.mp4, .webm…), an .m3u8 playlist or an .mpd manifest" required />
+        <button class="primary" type="submit" data-i18n="download">⚡ Download</button>
       </form>
 
       <div class="toolbar">
-        <h2>Downloads</h2>
-        <button id="clear-finished" class="ghost">Remove finished</button>
+        <h2 data-i18n="downloadsHeading">Downloads</h2>
+        <button id="clear-finished" class="ghost" data-i18n="removeFinished">Remove finished</button>
       </div>
       <div id="jobs"></div>
 
       <div class="toolbar">
-        <h2>History</h2>
-        <button id="clear-history" class="ghost">Clear history</button>
+        <h2 data-i18n="historyHeading">History</h2>
+        <button id="clear-history" class="ghost" data-i18n="clearHistory">Clear history</button>
       </div>
       <div id="history"></div>
     </main>

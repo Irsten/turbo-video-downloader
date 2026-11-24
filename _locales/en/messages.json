@@ -1,0 +1,494 @@
+{
+  "extName": {
+    "message": "Turbo Video Downloader"
+  },
+  "extDescription": {
+    "message": "Detects videos (MP4, WebM, HLS, DASH) and downloads them fast over many connections into one MP4 – with subtitles and resuming."
+  },
+  "ctxVideo": {
+    "message": "⚡ Download this video (Turbo)"
+  },
+  "ctxLink": {
+    "message": "⚡ Download video from link (Turbo)"
+  },
+  "hintStream": {
+    "message": "This video is played from a stream – click the extension icon to choose the quality."
+  },
+  "hintRefresh": {
+    "message": "Reload the page with the video and download it again."
+  },
+  "errEncrypted": {
+    "message": "This stream is encrypted (DRM / AES key). The extension does not download such content."
+  },
+  "errAccessDenied": {
+    "message": "Access denied (HTTP $1) – the link may have expired or requires signing in."
+  },
+  "errGone": {
+    "message": "The file is no longer at this address (HTTP $1) – the link expired or the video was removed."
+  },
+  "errTooManyRequests": {
+    "message": "The server limits the number of requests (HTTP 429) – lower the number of connections in the settings and try again."
+  },
+  "errServer": {
+    "message": "Server error (HTTP $1) – try again in a moment."
+  },
+  "errHttp": {
+    "message": "The server responded with HTTP $1"
+  },
+  "errNotMedia": {
+    "message": "The server returned a web page instead of the video – the link has probably expired or requires signing in."
+  },
+  "errCanceled": {
+    "message": "Canceled"
+  },
+  "errDropped": {
+    "message": "Connection dropped before the end of the file"
+  },
+  "errRangesStopped": {
+    "message": "The server stopped supporting range requests"
+  },
+  "errDroppedChunk": {
+    "message": "Connection dropped in the middle of a chunk"
+  },
+  "errAssemble": {
+    "message": "Error assembling the file from chunks"
+  },
+  "errSizeMismatch": {
+    "message": "The size of the assembled file does not match"
+  },
+  "errIncompleteSegment": {
+    "message": "Incomplete segment"
+  },
+  "errNoVariants": {
+    "message": "The playlist contains no variants"
+  },
+  "errNestedMaster": {
+    "message": "Unexpected nested master playlist"
+  },
+  "errNoSegments": {
+    "message": "The playlist contains no segments"
+  },
+  "errDashLive": {
+    "message": "Live streams in DASH format are not supported."
+  },
+  "errNoTracksInManifest": {
+    "message": "The manifest contains no tracks to download"
+  },
+  "errNotHls": {
+    "message": "This is not an HLS playlist (.m3u8)"
+  },
+  "errNotDash": {
+    "message": "This is not a DASH manifest (.mpd)"
+  },
+  "errNoSamples": {
+    "message": "No samples to write"
+  },
+  "errAudioNotAac": {
+    "message": "Audio track in a format other than AAC"
+  },
+  "errVideoCodec": {
+    "message": "Video codec $1 – merging into MP4 is not supported"
+  },
+  "errAudioCodec": {
+    "message": "Audio codec $1 – merging into MP4 is not supported"
+  },
+  "errEncryptedTrack": {
+    "message": "Encrypted track (DRM)"
+  },
+  "errCodecChange": {
+    "message": "Codec changes in the middle of the stream"
+  },
+  "errNoInit": {
+    "message": "Missing initialization segment (moov)"
+  },
+  "errWebm": {
+    "message": "WebM format – merging into MP4 is not supported"
+  },
+  "errUnknownFormat": {
+    "message": "Unrecognized segment format"
+  },
+  "errNoTracksToMerge": {
+    "message": "No tracks found to merge"
+  },
+  "errDiskWrite": {
+    "message": "Error writing to disk"
+  },
+  "errNoSpace": {
+    "message": "Not enough disk space"
+  },
+  "labelTrack": {
+    "message": "track"
+  },
+  "labelVariant": {
+    "message": "variant"
+  },
+  "templateHelp": {
+    "message": "{title} – page title, {quality} – e.g. 720p, {file} – name from the address, {site} – domain, {date} – today's date"
+  },
+  "toastRecording": {
+    "message": "Recording started in the manager ⏺"
+  },
+  "toastAdded": {
+    "message": "Added to the download manager ⚡"
+  },
+  "toastHanded": {
+    "message": "Handed over to the browser downloads"
+  },
+  "toastError": {
+    "message": "Error: $1"
+  },
+  "fileNameTitle": {
+    "message": "File name (without extension) – you can change it before downloading"
+  },
+  "subtitlesNone": {
+    "message": "No subtitles"
+  },
+  "subtitlesItem": {
+    "message": "Subtitles: $1"
+  },
+  "subtitlesAll": {
+    "message": "All subtitles"
+  },
+  "subtitlesTitle": {
+    "message": "Subtitles (saved next to the video as .srt)"
+  },
+  "subtitlesFallback": {
+    "message": "subtitles"
+  },
+  "download": {
+    "message": "⚡ Download"
+  },
+  "downloadTitle": {
+    "message": "Download over many connections at once"
+  },
+  "plainDownloadTitle": {
+    "message": "Regular browser download (1 connection, without the page headers)"
+  },
+  "sizeUnknown": {
+    "message": "size unknown"
+  },
+  "analyzingPlaylist": {
+    "message": "analyzing the playlist…"
+  },
+  "analyzingManifest": {
+    "message": "analyzing the manifest…"
+  },
+  "record": {
+    "message": "⏺ Record"
+  },
+  "recordTitle": {
+    "message": "Records the live stream until you stop it in the download manager"
+  },
+  "playlistUnreadable": {
+    "message": "couldn't read the playlist – will try anyway"
+  },
+  "manifestUnreadable": {
+    "message": "couldn't read the manifest – will try anyway"
+  },
+  "encrypted": {
+    "message": "🔒 Encrypted"
+  },
+  "protectedStream": {
+    "message": "Protected stream (DRM / encryption) – cannot be downloaded."
+  },
+  "live": {
+    "message": "LIVE"
+  },
+  "noVariants": {
+    "message": "no video variants"
+  },
+  "qualityTitle": {
+    "message": "Quality (estimated size)"
+  },
+  "audioTrackTitle": {
+    "message": "Audio track"
+  },
+  "audioItem": {
+    "message": "Audio: $1"
+  },
+  "qualityOne": {
+    "message": "1 quality"
+  },
+  "qualityMany": {
+    "message": "$1 qualities"
+  },
+  "segmentsCount": {
+    "message": "$1 segments"
+  },
+  "dashLiveUnsupported": {
+    "message": "Live streams in DASH format are not supported (HLS ones are)."
+  },
+  "noTracks": {
+    "message": "No tracks"
+  },
+  "firstPartOnly": {
+    "message": "first part only"
+  },
+  "emptySubpage": {
+    "message": "No videos detected on this sub-page yet."
+  },
+  "emptyTab": {
+    "message": "No videos detected on this tab yet."
+  },
+  "emptyHint": {
+    "message": "Start playing the video – the extension will pick it up from the network traffic."
+  },
+  "emptyReload": {
+    "message": "If the page was open before the extension was installed, reload it."
+  },
+  "earlierOnTab": {
+    "message": "Earlier on this tab ($1)"
+  },
+  "managerButton": {
+    "message": "Download manager"
+  },
+  "managerButtonCount": {
+    "message": "Download manager ($1)"
+  },
+  "managerUnfinished": {
+    "message": "$1 unfinished downloads – open the manager to resume them"
+  },
+  "clear": {
+    "message": "Clear"
+  },
+  "clearTitle": {
+    "message": "Clear the list of detected videos for this tab"
+  },
+  "managerTitle": {
+    "message": "Download manager – Turbo Video Downloader"
+  },
+  "settingConnections": {
+    "message": "Connections per file"
+  },
+  "settingConnectionsTitle": {
+    "message": "How many parallel HTTP connections per file (MP4/WebM). For HTTP/1.1 servers Chromium-based browsers open at most 6 connections per host."
+  },
+  "settingSegments": {
+    "message": "Segments at once"
+  },
+  "settingSegmentsTitle": {
+    "message": "How many HLS/DASH segments to download at the same time"
+  },
+  "settingParallel": {
+    "message": "Downloads at once"
+  },
+  "settingParallelTitle": {
+    "message": "How many videos to download at the same time (live recordings don't count towards the limit)"
+  },
+  "settingMp4": {
+    "message": "Merge into one MP4 file"
+  },
+  "settingMp4Title": {
+    "message": "Video, audio and HLS/DASH segments are put together into one .mp4 file – no re-encoding, no quality loss"
+  },
+  "settingSaveAs": {
+    "message": "Ask where to save"
+  },
+  "settingNotify": {
+    "message": "Notifications"
+  },
+  "settingNotifyTitle": {
+    "message": "Notification when a download finishes or fails while this tab is in the background"
+  },
+  "settingFileName": {
+    "message": "File name"
+  },
+  "diskNote": {
+    "message": "Downloaded data goes straight to disk. If you close this tab or restart the browser, downloads resume when you open the manager again."
+  },
+  "addPlaceholder": {
+    "message": "Paste a link to a video file (.mp4, .webm…), an .m3u8 playlist or an .mpd manifest"
+  },
+  "downloadsHeading": {
+    "message": "Downloads"
+  },
+  "removeFinished": {
+    "message": "Remove finished"
+  },
+  "historyHeading": {
+    "message": "History"
+  },
+  "clearHistory": {
+    "message": "Clear history"
+  },
+  "templatePreview": {
+    "message": "e.g. \"$1\""
+  },
+  "templateSampleTitle": {
+    "message": "Cat video"
+  },
+  "infoLive": {
+    "message": "live stream – downloading the part available now"
+  },
+  "infoConnections": {
+    "message": "$1 parallel connections"
+  },
+  "infoNoRanges": {
+    "message": "the server doesn't support ranges – 1 connection"
+  },
+  "infoRecording": {
+    "message": "recording $1"
+  },
+  "infoAudio": {
+    "message": "audio: $1"
+  },
+  "infoOneMp4": {
+    "message": "one MP4 file"
+  },
+  "infoNotMerged": {
+    "message": "not merged into MP4: $1"
+  },
+  "notifyDone": {
+    "message": "Video downloaded"
+  },
+  "notifyFailed": {
+    "message": "Download failed"
+  },
+  "notifyDoneHint": {
+    "message": "$1 · click to show in folder"
+  },
+  "notifyFailedHint": {
+    "message": "click to open the manager"
+  },
+  "historyEmpty": {
+    "message": "Finished downloads will appear here."
+  },
+  "show": {
+    "message": "Show"
+  },
+  "showTitle": {
+    "message": "Show the file in its folder"
+  },
+  "fileGone": {
+    "message": "The file is no longer on disk"
+  },
+  "downloadAgain": {
+    "message": "Download again"
+  },
+  "downloadAgainTitle": {
+    "message": "Add the same download once more"
+  },
+  "historyRemoveTitle": {
+    "message": "Remove from history (the file stays on disk)"
+  },
+  "errNothingRecorded": {
+    "message": "Nothing has been recorded"
+  },
+  "errNothingDownloaded": {
+    "message": "Nothing has been downloaded"
+  },
+  "hintSeparateFiles": {
+    "message": "Video and audio are in separate files. Merge them without quality loss:"
+  },
+  "hintTsFile": {
+    "message": "Play the .ts file in VLC / MPC-HC. Converting to .mp4 (no quality loss, a few seconds):"
+  },
+  "errSaveCanceled": {
+    "message": "Saving canceled"
+  },
+  "errSaveFailed": {
+    "message": "Saving failed ($1)"
+  },
+  "statusQueued": {
+    "message": "queued"
+  },
+  "statusRunning": {
+    "message": "downloading…"
+  },
+  "statusRecording": {
+    "message": "⏺ recording…"
+  },
+  "statusPaused": {
+    "message": "paused"
+  },
+  "statusInterrupted": {
+    "message": "recording interrupted"
+  },
+  "statusProcessing": {
+    "message": "merging into MP4…"
+  },
+  "statusProcessingPct": {
+    "message": "merging into MP4… $1%"
+  },
+  "statusSaving": {
+    "message": "saving to disk…"
+  },
+  "statusDone": {
+    "message": "done ✓"
+  },
+  "statusError": {
+    "message": "error"
+  },
+  "statusUnsaved": {
+    "message": "downloaded, not saved"
+  },
+  "statDownloaded": {
+    "message": "Downloaded"
+  },
+  "downloadedOf": {
+    "message": "$1 of $2"
+  },
+  "statSpeed": {
+    "message": "Speed"
+  },
+  "statRemaining": {
+    "message": "Remaining"
+  },
+  "statSegments": {
+    "message": "Segments"
+  },
+  "statRecorded": {
+    "message": "Recorded"
+  },
+  "statTime": {
+    "message": "Time"
+  },
+  "statAverage": {
+    "message": "Average"
+  },
+  "statKept": {
+    "message": "Kept"
+  },
+  "keptHint": {
+    "message": "$1 – \"Resume\" will continue the download from here"
+  },
+  "interruptedHint": {
+    "message": "The recorded part is on disk – you can save it or keep recording."
+  },
+  "pause": {
+    "message": "Pause"
+  },
+  "pauseTitle": {
+    "message": "Downloaded data stays on disk"
+  },
+  "stopAndSave": {
+    "message": "⏹ Stop and save"
+  },
+  "resume": {
+    "message": "Resume"
+  },
+  "retry": {
+    "message": "Retry"
+  },
+  "saveRecording": {
+    "message": "Save recording"
+  },
+  "keepRecording": {
+    "message": "Keep recording"
+  },
+  "save": {
+    "message": "Save"
+  },
+  "showInFolder": {
+    "message": "Show in folder"
+  },
+  "removeJobTitle": {
+    "message": "Remove (together with the downloaded data)"
+  },
+  "confirmRemove": {
+    "message": "Remove this download together with the downloaded data?"
+  },
+  "emptyJobs": {
+    "message": "No downloads. Click the extension icon on a page with a video and choose \"⚡ Download\"."
+  }
+}

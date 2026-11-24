@@ -218,7 +218,7 @@ function sumDurations(buf, timescale) {
   while ((p = buf.indexOf('trun', p, 'latin1')) >= 0) {
     const flags = buf.readUIntBE(p + 5, 3);
     const count = buf.readUInt32BE(p + 8);
-    let q = p + 12 + (flags & 1 ? 4 : 0) + (flags & 4 ? 4 : 0);
+    const q = p + 12 + (flags & 1 ? 4 : 0) + (flags & 4 ? 4 : 0);
     const per = [0x100, 0x200, 0x400, 0x800].filter((f) => flags & f).length * 4;
     if (flags & 0x100) for (let i = 0; i < count; i++) total += buf.readUInt32BE(q + i * per);
     else total += count * (timescale / 30);

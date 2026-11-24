@@ -52,9 +52,9 @@ async function removeDir(dir) {
 
 /**
  * Launches Chrome. Returns { send, evaluate, openTarget, close, downloads, work, stderr() }.
- * downloads – the profile's downloads folder.
+ * downloads – the profile's downloads folder. lang – browser UI language (decides the extension's language).
  */
-export async function launchChrome({ headful = !!process.env.HEADFUL, keep = !!process.env.KEEP } = {}) {
+export async function launchChrome({ headful = !!process.env.HEADFUL, keep = !!process.env.KEEP, lang = 'en-US' } = {}) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'tvd-e2e-'));
   const profile = path.join(work, 'profile');
   const downloads = path.join(work, 'downloads');
@@ -64,6 +64,7 @@ export async function launchChrome({ headful = !!process.env.HEADFUL, keep = !!p
     path.join(profile, 'Default', 'Preferences'),
     JSON.stringify({ download: { default_directory: downloads, prompt_for_download: false, directory_upgrade: true } })
   );
+  fs.writeFileSync(path.join(profile, 'Local State'), JSON.stringify({ intl: { app_locale: lang } }));
 
   const proc = spawn(
     findChrome(),
@@ -77,6 +78,7 @@ export async function launchChrome({ headful = !!process.env.HEADFUL, keep = !!p
       '--disable-background-networking',
       '--disable-sync',
       '--autoplay-policy=no-user-gesture-required',
+      `--lang=${lang}`,
       'about:blank'
     ],
     { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }
