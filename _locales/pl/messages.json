@@ -74,6 +74,9 @@
   "errNoTracksInManifest": {
     "message": "Manifest nie zawiera ścieżek do pobrania"
   },
+  "errDashNoDuration": {
+    "message": "Manifest nie podaje długości filmu, więc nie da się ustalić listy segmentów."
+  },
   "errNotHls": {
     "message": "To nie jest playlista HLS (.m3u8)"
   },

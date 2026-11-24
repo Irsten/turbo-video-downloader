@@ -74,6 +74,9 @@
   "errNoTracksInManifest": {
     "message": "The manifest contains no tracks to download"
   },
+  "errDashNoDuration": {
+    "message": "The manifest doesn't give the length of the video, so the list of segments can't be worked out."
+  },
   "errNotHls": {
     "message": "This is not an HLS playlist (.m3u8)"
   },

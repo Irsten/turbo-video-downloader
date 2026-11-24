@@ -166,3 +166,32 @@ test('name template: variables, empty brackets, forbidden characters, defaults',
   assert.match(applyTemplate('{date} {file}', v), /^\d{4}-\d{2}-\d{2} video123$/);
   assert.equal(applyTemplate('{unknown} {title}', v), '{unknown} Cat video', 'unknown variables stay');
 });
+
+// ---------------- fixes from the code review ----------------
+
+test('file name: cut at 120 characters without breaking an emoji', async () => {
+  const { sanitizeFilename } = await import('../lib/media.js');
+  const name = sanitizeFilename('a'.repeat(119) + '😀😀 end');
+  assert.equal(Array.from(name).length, 120);
+  assert.ok(name.endsWith('😀'));
+  assert.doesNotMatch(name, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/, 'no lone surrogate');
+});
+
+test('DASH: a duration-based template without a known length is marked, not guessed', () => {
+  const mpd = parseMpd(
+    `<MPD type="static"><Period><AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate media="v/seg-$Number$.m4s" initialization="v/init.mp4" duration="2"/>
+      <Representation id="v" bandwidth="1"/></AdaptationSet></Period></MPD>`,
+    'https://x/a.mpd'
+  );
+  assert.equal(mpd.video[0].unknownLength, true);
+  assert.deepEqual(mpd.video[0].segments, []);
+});
+
+test('SPS: the fixture parses; a cut SPS throws instead of giving garbage', async () => {
+  const { parseSps, splitNals } = await import('../lib/ts.js');
+  const { loadFixtures } = await import('./media.mjs');
+  const sps = splitNals(loadFixtures().video[0].data).find((n) => (n[0] & 31) === 7);
+  assert.deepEqual(parseSps(sps), { width: 320, height: 180 });
+  assert.throws(() => parseSps(sps.subarray(0, 3)), /past the end/);
+});

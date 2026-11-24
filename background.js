@@ -85,13 +85,18 @@ async function enqueueJob(job) {
 // ---------- context menu ----------
 const VIDEO_LINKS = ['mp4', 'm4v', 'webm', 'mov', 'mkv', 'm3u8', 'mpd'].map((e) => `*://*/*.${e}*`);
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.action.setBadgeBackgroundColor({ color: '#e5243b' });
+/** (Re)creates the context menu – also on browser start, so its titles follow the current browser language. */
+function createMenus() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'tvd-video', title: tr('ctxVideo'), contexts: ['video'] });
     chrome.contextMenus.create({ id: 'tvd-link', title: tr('ctxLink'), contexts: ['link'], targetUrlPatterns: VIDEO_LINKS });
   });
+}
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.action.setBadgeBackgroundColor({ color: '#e5243b' });
+  createMenus();
 });
+chrome.runtime.onStartup.addListener(createMenus);
 
 /** Download from the context menu: a link or the source of a <video>. */
 async function downloadFromContext(info, tab) {

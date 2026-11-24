@@ -339,3 +339,47 @@ test('DASH with DRM is rejected', async () => {
   dashAssets();
   await assert.rejects(downloadDash(`${base}/dash/drm.mpd`, opts({ openFile: files().open })), (e) => e.message === ENCRYPTED_MSG);
 });
+
+// ---------------- fixes from the code review ----------------
+
+test('HLS live: "Keep recording" after a restart counts the length recorded before it', async () => {
+  liveReset({ step: 300 });
+  const fs = files();
+  const resume = {};
+  const stop1 = new AbortController();
+  setTimeout(() => stop1.abort(), 1000);
+  const r1 = await downloadHls(`${base}/live/index.m3u8`, opts({ openFile: fs.open, record: true, stopSignal: stop1.signal, resume, concurrency: 2 }));
+  const stop2 = new AbortController();
+  setTimeout(() => stop2.abort(), 1000);
+  const r2 = await downloadHls(
+    `${base}/live/index.m3u8`,
+    opts({ openFile: fs.open, record: true, stopSignal: stop2.signal, resume: persist(resume), concurrency: 2 })
+  );
+  const n = r2.tracks[0].parts.length;
+  assert.ok(n > r1.tracks[0].parts.length, `${r1.tracks[0].parts.length} → ${n} segments`);
+  assert.ok(Math.abs(r2.duration - n * 0.3) < 0.01, `length ${r2.duration} for ${n} segments of 0.3 s`);
+});
+
+test('DASH without a known length: a clear error instead of an empty download', async () => {
+  assets['/dash/nodur.mpd'] = {
+    type: 'application/dash+xml',
+    body: `<MPD type="static"><Period><AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate media="v/seg-$Number$.m4s" initialization="v/init.mp4" duration="2"/>
+      <Representation id="v" bandwidth="1"/></AdaptationSet></Period></MPD>`
+  };
+  await assert.rejects(downloadDash(`${base}/dash/nodur.mpd`, opts({ openFile: files().open })), /doesn't give the length/);
+});
+
+test('DiskFile: a failed append gives the reserved space back', async () => {
+  const { DiskFile } = await import('../lib/store.js');
+  const f = new DiskFile('test', 10);
+  let fail = true;
+  f.write = async (pos, u8) => {
+    if (fail) throw new Error('disk full');
+    f.size = Math.max(f.size, pos + u8.byteLength);
+  };
+  await assert.rejects(f.append(new Uint8Array(5)), /disk full/);
+  assert.equal(f.size, 10, 'size back to where it was');
+  fail = false;
+  assert.equal(await f.append(new Uint8Array(5)), 10, 'the next append fills the same place');
+});
